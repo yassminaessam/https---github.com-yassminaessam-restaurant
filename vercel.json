@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "env": {
+    "NODE_ENV": "production"
+  },
+  "buildCommand": "pnpm run build",
+  "outputDirectory": "dist/spa",
+  "installCommand": "pnpm install",
+  "framework": null,
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/api"
+    }
+  ]
+}
