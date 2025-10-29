@@ -1233,11 +1233,16 @@ export default function UsersRoles() {
                     {category.permissions.map((permission) => (
                       <div key={permission.id} className="flex items-center justify-between p-2 rounded hover:bg-slate-50 dark:hover:bg-slate-800">
                         <div className="flex items-center gap-2">
-                          <input type="checkbox" className="w-4 h-4" />
-                          <div>
+                          <input 
+                            type="checkbox" 
+                            className="w-4 h-4" 
+                            id={`permission-${permission.id}`}
+                            aria-label={permission.name}
+                          />
+                          <label htmlFor={`permission-${permission.id}`} className="cursor-pointer">
                             <p className="font-semibold text-sm">{permission.name}</p>
                             <p className="text-xs text-muted-foreground">{permission.id}</p>
-                          </div>
+                          </label>
                         </div>
                         {permission.critical && (
                           <Badge variant="outline" className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100 text-xs">

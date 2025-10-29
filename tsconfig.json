@@ -18,7 +18,7 @@
     "forceConsistentCasingInFileNames": true,
 
     /* Linting */
-    "strict": false,
+    "strict": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noImplicitAny": false,
@@ -36,6 +36,7 @@
     "client/**/*",
     "server/**/*",
     "shared/**/*",
+    "api/**/*",
     "vite.config.ts",
     "vite.config.server.ts"
   ],
