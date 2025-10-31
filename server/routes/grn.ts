@@ -8,23 +8,31 @@ export const createGRN: RequestHandler = async (req, res) => {
     const prisma = getPrisma();
     const { warehouseCode, supplierName, items } = req.body;
 
+    console.log('GRN Request:', { warehouseCode, supplierName, itemsCount: items?.length });
+
     if (!warehouseCode || !items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: "warehouseCode and items[] are required" });
     }
 
     const warehouse = await prisma.warehouse.findUnique({ where: { code: warehouseCode } });
-    if (!warehouse) return res.status(404).json({ error: `Warehouse ${warehouseCode} not found` });
+    if (!warehouse) {
+      console.error(`Warehouse not found: ${warehouseCode}`);
+      return res.status(404).json({ error: `Warehouse ${warehouseCode} not found` });
+    }
+
+    console.log('Creating GRN for warehouse:', warehouse.id);
 
     // Create GRN header
     const grn = await prisma.goodsReceiptNote.create({
       data: {
         grnNumber: `GRN-${Date.now()}`,
-        poId: null,
         warehouseId: warehouse.id,
         status: "posted",
         grnDate: new Date(),
       },
     });
+
+    console.log('GRN created:', grn.grnNumber);
 
     // Process each item
     for (const line of items) {
@@ -63,9 +71,10 @@ export const createGRN: RequestHandler = async (req, res) => {
       });
     }
 
-    res.json({ grnNumber: grn.grnNumber, id: grn.id });
+    console.log('GRN completed successfully');
+    return res.status(200).json({ grnNumber: grn.grnNumber, id: grn.id });
   } catch (err: any) {
     console.error("GRN error:", err);
-    res.status(500).json({ error: err.message || "Failed to create GRN" });
+    return res.status(500).json({ error: err.message || "Failed to create GRN", details: err.toString() });
   }
 };
