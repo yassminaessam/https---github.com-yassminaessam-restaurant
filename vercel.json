@@ -1,11 +1,17 @@
 {
   "buildCommand": "pnpm prisma generate && pnpm run build:client",
   "outputDirectory": "dist/spa",
-  "installCommand": "pnpm install",
-  "rewrites": [
+  "routes": [
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }
