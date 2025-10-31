@@ -1,7 +1,3 @@
-// Load dotenv only in development (Vercel uses env vars directly)
-if (process.env.NODE_ENV !== 'production') {
-  await import('dotenv/config');
-}
 import express from "express";
 import cors from "cors";
 import { handleDemo } from "./routes/demo";
