@@ -1,567 +1,454 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+generator client {
+  provider = "prisma-client-js"
+}
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
-// ============ CORE MASTER DATA ============
-
-model User {
-  id        String     @id @default(cuid())
-  email     String     @unique
-  name      String?
-  password  String? // hashed
-  role      String     @default("staff") // admin, manager, staff, pos_operator
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-
-  orders    PosOrder[]
-  transfers StockTransfer[]
-  productionOrders ProductionOrder[]
-}
-
-// ============ INVENTORY MASTER ============
-
-model Warehouse {
-  id        String   @id @default(cuid())
-  code      String   @unique
-  name      String
-  type      String   @default("storage") // storage, kitchen, buffet, fridge, minibar
-  createdAt DateTime @default(now())
-
-  batches         StockBatch[]
-  transfers       StockTransfer[]
-  ledger          StockLedger[]
-  stockCounts     StockCount[]
-}
-
-model Item {
-  id        String   @id @default(cuid())
-  sku       String   @unique
-  name      String   // e.g., "دجاج مشوي" (Grilled Chicken)
-  category  String   // e.g., "لحوم" (Meat), "مشروبات" (Beverages)
-  type      String   @default("finished_good") // raw_material, finished_good, packaging
-  baseUom   String   // e.g., "kg", "liter", "piece"
-  createdAt DateTime @default(now())
-
-  pricing           ItemPrice[]
-  batchLines        StockBatch[]
-  ledger            StockLedger[]
-  recipeLines       RecipeLine[]
-  posOrderItems     PosOrderItem[]
-  productionOutputs ProductionOutput[]
-  productionInputs  ProductionConsumption[]
-  purchaseOrderLines PurchaseOrderLine[]
-}
-
-model ItemPrice {
-  id        String   @id @default(cuid())
-  itemId    String
-  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  
-  currency  String   @default("EGP")
-  salePrice Decimal  @db.Decimal(12, 2)
-  costPrice Decimal  @db.Decimal(12, 2)
-  taxRate   Decimal  @db.Decimal(5, 2) @default(0) // percentage
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model StockBatch {
-  id          String   @id @default(cuid())
-  itemId      String
-  item        Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  
-  warehouseId String
-  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
-  
-  lotNumber   String?
-  expiryDate  DateTime?
-  receivedAt  DateTime @default(now())
-  qtyOnHand   Decimal  @db.Decimal(16, 4) @default(0)
-  
-  costPrice   Decimal  @db.Decimal(12, 2) // FIFO/FEFO cost tracking
-  createdAt   DateTime @default(now())
-
-  ledgerLines StockLedger[]
-}
-
-model StockLedger {
-  id          String   @id @default(cuid())
-  itemId      String
-  item        Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  
-  warehouseId String
-  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
-  
-  batchId     String?
-  batch       StockBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
-  
-  movementType String  // in, out, adjust, transfer, production_input, production_output, return
-  reference    String? // GRN_ID, TRANSFER_ID, ORDER_ID, etc.
-  qty          Decimal @db.Decimal(16, 4)
-  costAmount   Decimal @db.Decimal(16, 2) @default(0)
-  
-  createdAt    DateTime @default(now())
-}
-
-// ============ PURCHASING & GRN ============
-
-model Supplier {
-  id        String   @id @default(cuid())
-  code      String   @unique
-  name      String   // e.g., "السوق المحلي" (Local Market)
-  contact   String?
-  createdAt DateTime @default(now())
-
-  purchaseOrders PurchaseOrder[]
-}
-
-model PurchaseOrder {
-  id          String   @id @default(cuid())
-  poNumber    String   @unique
-  supplierId  String
-  supplier    Supplier @relation(fields: [supplierId], references: [id])
-  
-  status      String   @default("draft") // draft, submitted, posted, cancelled
-  poDate      DateTime @default(now())
-  expectedDate DateTime?
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  lines       PurchaseOrderLine[]
-  grn         GoodsReceiptNote?
-}
-
-model PurchaseOrderLine {
-  id          String   @id @default(cuid())
-  poId        String
-  po          PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
-  
-  itemId      String
-  item        Item     @relation(fields: [itemId], references: [id])
-  
-  qty         Decimal  @db.Decimal(16, 4)
-  unitPrice   Decimal  @db.Decimal(12, 2)
-  totalAmount Decimal  @db.Decimal(16, 2)
-  
-  createdAt   DateTime @default(now())
-}
-
-model GoodsReceiptNote {
-  id          String   @id @default(cuid())
-  grnNumber   String   @unique
-  poId        String?  @unique
-  po          PurchaseOrder? @relation(fields: [poId], references: [id])
-  
-  warehouseId String
-  status      String   @default("draft") // draft, posted, cancelled
-  grnDate     DateTime @default(now())
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  lines       GoodsReceiptLine[]
-}
-
-model GoodsReceiptLine {
-  id          String   @id @default(cuid())
-  grnId       String
-  grn         GoodsReceiptNote @relation(fields: [grnId], references: [id], onDelete: Cascade)
-  
-  itemId      String
-  poLineId    String?
-  
-  qtyReceived Decimal  @db.Decimal(16, 4)
-  lotNumber   String?
-  expiryDate  DateTime?
-  costPrice   Decimal  @db.Decimal(12, 2)
-  
-  createdAt   DateTime @default(now())
-}
-
-// ============ RECIPES & PRODUCTION ============
-
-model Recipe {
-  id          String   @id @default(cuid())
-  code        String   @unique
-  name        String   // e.g., "وجبة مشكلة" (Mixed Plate)
-  description String?
-  yieldQty    Decimal  @db.Decimal(16, 4) @default(1)
-  yieldUom    String   @default("piece")
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  lines       RecipeLine[]
-  productionOrders ProductionOrder[]
-}
-
-model RecipeLine {
-  id        String   @id @default(cuid())
-  recipeId  String
-  recipe    Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
-  
-  itemId    String
-  item      Item     @relation(fields: [itemId], references: [id])
-  
-  qty       Decimal  @db.Decimal(16, 4)
-  uom       String
-  
+model AuditLog {
+  id        String   @id
+  userId    String?
+  action    String
+  entity    String
+  entityId  String
+  oldValues Json?
+  newValues Json?
   createdAt DateTime @default(now())
 }
 
-model ProductionOrder {
-  id        String   @id @default(cuid())
-  poNumber  String   @unique
-  recipeId  String
-  recipe    Recipe   @relation(fields: [recipeId], references: [id])
-  
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  
-  plannedQty Decimal @db.Decimal(16, 4)
-  actualQty  Decimal @db.Decimal(16, 4) @default(0)
-  status     String  @default("draft") // draft, released, in_progress, completed
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  consumptions ProductionConsumption[]
-  outputs      ProductionOutput[]
+model DeliveryArea {
+  id            String          @id
+  code          String          @unique
+  name          String
+  deliveryFee   Decimal         @db.Decimal(10, 2)
+  estimatedTime Int
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime
+  DeliveryOrder DeliveryOrder[]
 }
 
-model ProductionConsumption {
-  id              String   @id @default(cuid())
-  productionOrderId String
-  productionOrder ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
-  
-  itemId          String
-  item            Item     @relation(fields: [itemId], references: [id])
-  
-  qty             Decimal  @db.Decimal(16, 4)
-  createdAt       DateTime @default(now())
-}
-
-model ProductionOutput {
-  id              String   @id @default(cuid())
-  productionOrderId String
-  productionOrder ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
-  
-  itemId          String
-  item            Item     @relation(fields: [itemId], references: [id])
-  
-  qty             Decimal  @db.Decimal(16, 4)
-  createdAt       DateTime @default(now())
-}
-
-// ============ STOCK TRANSFERS ============
-
-model StockTransfer {
-  id          String   @id @default(cuid())
-  transferNumber String @unique
-  
-  fromWarehouseId String
-  fromWarehouse   Warehouse @relation(fields: [fromWarehouseId], references: [id])
-  
-  toWarehouseId String
-  // Note: relationships limited by Prisma (one-to-many per relation)
-  
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  
-  status      String   @default("draft") // draft, approved, picked, in_transit, received, closed
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  lines       StockTransferLine[]
-}
-
-model StockTransferLine {
-  id          String   @id @default(cuid())
-  transferId  String
-  transfer    StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
-  
-  itemId      String
-  qty         Decimal @db.Decimal(16, 4)
-  
-  createdAt   DateTime @default(now())
-}
-
-// ============ STOCK COUNTS (AUDITS) ============
-
-model StockCount {
-  id          String   @id @default(cuid())
-  countNumber String   @unique
-  warehouseId String
-  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
-  
-  status      String   @default("scheduled") // scheduled, counting, review, approved, posted
-  countDate   DateTime @default(now())
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  lines       StockCountLine[]
-}
-
-model StockCountLine {
-  id          String   @id @default(cuid())
-  countId     String
-  count       StockCount @relation(fields: [countId], references: [id], onDelete: Cascade)
-  
-  warehouseId String
-  
-  itemId      String
-  physical    Decimal @db.Decimal(16, 4) // physically counted
-  system      Decimal @db.Decimal(16, 4) // system balance
-  
-  createdAt   DateTime @default(now())
-}
-
-// ============ POS & SALES ============
-
-model Tax {
-  id        String   @id @default(cuid())
-  code      String   @unique
-  name      String   // e.g., "ضريبة المبيعات" (Sales Tax)
-  rate      Decimal  @db.Decimal(5, 2)
-  createdAt DateTime @default(now())
-}
-
-model PosOrder {
-  id          String   @id @default(cuid())
-  orderNumber String   @unique
-  
-  userId      String?
-  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  
-  type        String   // dine_in, takeaway, delivery
-  status      String   @default("open") // open, parked, paid, cancelled
-  source      String   @default("pos") // pos, mobile, api
-  
-  subtotal    Decimal  @db.Decimal(16, 2) @default(0)
-  taxAmount   Decimal  @db.Decimal(16, 2) @default(0)
-  discountAmount Decimal @db.Decimal(16, 2) @default(0)
-  total       Decimal  @db.Decimal(16, 2) @default(0)
-  
-  customerName String?
-  customerPhone String?
-  
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  paidAt      DateTime?
-
-  items       PosOrderItem[]
-  payments    Payment[]
-  invoice     Invoice?
-}
-
-model PosOrderItem {
-  id        String   @id @default(cuid())
-  orderId   String
-  order     PosOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  
-  itemId    String
-  item      Item     @relation(fields: [itemId], references: [id])
-  
-  qty       Decimal  @db.Decimal(16, 4)
-  unitPrice Decimal  @db.Decimal(12, 2)
-  taxRate   Decimal  @db.Decimal(5, 2) @default(0)
-  discount  Decimal  @db.Decimal(16, 2) @default(0)
-  lineTotal Decimal  @db.Decimal(16, 2)
-  
-  createdAt DateTime @default(now())
-}
-
-model Payment {
-  id        String   @id @default(cuid())
-  orderId   String
-  order     PosOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  
-  method    String   // cash, card, room_charge, check
-  amount    Decimal  @db.Decimal(16, 2)
-  reference String?  // transaction ID, room number, etc.
-  
-  createdAt DateTime @default(now())
-}
-
-model Invoice {
-  id        String   @id @default(cuid())
-  orderId   String   @unique
-  order     PosOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  
-  invoiceNumber String @unique
-  etaStatus String  @default("draft") // draft, submitted, verified, rejected
-  etaUuid   String?
-  qrCode    String?
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-// ============ DINE-IN TABLES ============
-
-model TableArea {
-  id        String   @id @default(cuid())
-  code      String   @unique
-  name      String   // e.g., "القاعة الرئيسية" (Main Hall)
-  createdAt DateTime @default(now())
-
-  tables    DineInTable[]
+model DeliveryOrder {
+  id              String        @id
+  orderNumber     String        @unique
+  driverId        String?
+  customerName    String
+  customerPhone   String
+  deliveryAddress String
+  status          String        @default("unassigned")
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime
+  areaId          String?
+  deliveryFee     Decimal       @default(0) @db.Decimal(10, 2)
+  DeliveryArea    DeliveryArea? @relation(fields: [areaId], references: [id])
+  Driver          Driver?       @relation(fields: [driverId], references: [id])
 }
 
 model DineInTable {
-  id        String   @id @default(cuid())
+  id          String    @id
   tableNumber Int
-  areaId    String
-  area      TableArea @relation(fields: [areaId], references: [id])
-  
-  capacity  Int      @default(4)
-  status    String   @default("free") // free, occupied, reserved, dirty, hold
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  areaId      String
+  capacity    Int       @default(4)
+  status      String    @default("free")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime
+  TableArea   TableArea @relation(fields: [areaId], references: [id])
 
   @@unique([areaId, tableNumber])
 }
 
-// ============ HOTEL INTEGRATION ============
-
-model HotelRoom {
-  id        String   @id @default(cuid())
-  roomNumber String @unique
-  floor     Int
-  category  String   // standard, deluxe, suite
-  status    String   @default("available") // available, occupied, maintenance
-  createdAt DateTime @default(now())
-
-  folios    Folio[]
+model Driver {
+  id            String          @id
+  code          String          @unique
+  name          String
+  phone         String
+  status        String          @default("available")
+  createdAt     DateTime        @default(now())
+  vehicleNumber String?
+  vehicleType   String?
+  DeliveryOrder DeliveryOrder[]
 }
 
 model Folio {
-  id        String   @id @default(cuid())
-  roomId    String
-  room      HotelRoom @relation(fields: [roomId], references: [id])
-  
-  guestName String
-  checkIn   DateTime
-  checkOut  DateTime?
-  status    String   @default("open") // open, closed
-  
-  balance   Decimal  @db.Decimal(16, 2) @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String       @id
+  roomId     String
+  guestName  String
+  checkIn    DateTime
+  checkOut   DateTime?
+  status     String       @default("open")
+  balance    Decimal      @default(0) @db.Decimal(16, 2)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime
+  HotelRoom  HotelRoom    @relation(fields: [roomId], references: [id])
+  RoomCharge RoomCharge[]
+}
 
-  charges   RoomCharge[]
+model GoodsReceiptLine {
+  id               String           @id
+  grnId            String
+  itemId           String
+  poLineId         String?
+  qtyReceived      Decimal          @db.Decimal(16, 4)
+  lotNumber        String?
+  expiryDate       DateTime?
+  costPrice        Decimal          @db.Decimal(12, 2)
+  createdAt        DateTime         @default(now())
+  GoodsReceiptNote GoodsReceiptNote @relation(fields: [grnId], references: [id], onDelete: Cascade)
+}
+
+model GoodsReceiptNote {
+  id               String             @id
+  grnNumber        String             @unique
+  poId             String?            @unique
+  warehouseId      String
+  status           String             @default("draft")
+  grnDate          DateTime           @default(now())
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime
+  GoodsReceiptLine GoodsReceiptLine[]
+  PurchaseOrder    PurchaseOrder?     @relation(fields: [poId], references: [id])
+}
+
+model HotelRoom {
+  id         String   @id
+  roomNumber String   @unique
+  floor      Int
+  category   String
+  status     String   @default("available")
+  createdAt  DateTime @default(now())
+  Folio      Folio[]
+}
+
+model Invoice {
+  id            String   @id
+  orderId       String   @unique
+  invoiceNumber String   @unique
+  etaStatus     String   @default("draft")
+  etaUuid       String?
+  qrCode        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime
+  PosOrder      PosOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model Item {
+  id                    String                  @id
+  sku                   String                  @unique
+  name                  String
+  category              String
+  type                  String                  @default("finished_good")
+  baseUom               String
+  createdAt             DateTime                @default(now())
+  ItemPrice             ItemPrice[]
+  PosOrderItem          PosOrderItem[]
+  ProductionConsumption ProductionConsumption[]
+  ProductionOutput      ProductionOutput[]
+  PurchaseOrderLine     PurchaseOrderLine[]
+  RecipeLine            RecipeLine[]
+  StockBatch            StockBatch[]
+  StockLedger           StockLedger[]
+}
+
+model ItemPrice {
+  id        String   @id
+  itemId    String
+  currency  String   @default("EGP")
+  salePrice Decimal  @db.Decimal(12, 2)
+  costPrice Decimal  @db.Decimal(12, 2)
+  taxRate   Decimal  @default(0) @db.Decimal(5, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+  Item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id        String   @id
+  orderId   String
+  method    String
+  amount    Decimal  @db.Decimal(16, 2)
+  reference String?
+  createdAt DateTime @default(now())
+  PosOrder  PosOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model PosOrder {
+  id             String         @id
+  orderNumber    String         @unique
+  userId         String?
+  type           String
+  status         String         @default("open")
+  source         String         @default("pos")
+  subtotal       Decimal        @default(0) @db.Decimal(16, 2)
+  taxAmount      Decimal        @default(0) @db.Decimal(16, 2)
+  discountAmount Decimal        @default(0) @db.Decimal(16, 2)
+  total          Decimal        @default(0) @db.Decimal(16, 2)
+  customerName   String?
+  customerPhone  String?
+  notes          String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime
+  paidAt         DateTime?
+  Invoice        Invoice?
+  Payment        Payment[]
+  User           User?          @relation(fields: [userId], references: [id])
+  PosOrderItem   PosOrderItem[]
+}
+
+model PosOrderItem {
+  id        String   @id
+  orderId   String
+  itemId    String
+  qty       Decimal  @db.Decimal(16, 4)
+  unitPrice Decimal  @db.Decimal(12, 2)
+  taxRate   Decimal  @default(0) @db.Decimal(5, 2)
+  discount  Decimal  @default(0) @db.Decimal(16, 2)
+  lineTotal Decimal  @db.Decimal(16, 2)
+  createdAt DateTime @default(now())
+  Item      Item     @relation(fields: [itemId], references: [id])
+  PosOrder  PosOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model ProductionConsumption {
+  id                String          @id
+  productionOrderId String
+  itemId            String
+  qty               Decimal         @db.Decimal(16, 4)
+  createdAt         DateTime        @default(now())
+  Item              Item            @relation(fields: [itemId], references: [id])
+  ProductionOrder   ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+}
+
+model ProductionOrder {
+  id                    String                  @id
+  poNumber              String                  @unique
+  recipeId              String
+  userId                String
+  plannedQty            Decimal                 @db.Decimal(16, 4)
+  actualQty             Decimal                 @default(0) @db.Decimal(16, 4)
+  status                String                  @default("draft")
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime
+  ProductionConsumption ProductionConsumption[]
+  Recipe                Recipe                  @relation(fields: [recipeId], references: [id])
+  User                  User                    @relation(fields: [userId], references: [id])
+  ProductionOutput      ProductionOutput[]
+}
+
+model ProductionOutput {
+  id                String          @id
+  productionOrderId String
+  itemId            String
+  qty               Decimal         @db.Decimal(16, 4)
+  createdAt         DateTime        @default(now())
+  Item              Item            @relation(fields: [itemId], references: [id])
+  ProductionOrder   ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+}
+
+model PurchaseOrder {
+  id                String              @id
+  poNumber          String              @unique
+  supplierId        String
+  status            String              @default("draft")
+  poDate            DateTime            @default(now())
+  expectedDate      DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime
+  GoodsReceiptNote  GoodsReceiptNote?
+  Supplier          Supplier            @relation(fields: [supplierId], references: [id])
+  PurchaseOrderLine PurchaseOrderLine[]
+}
+
+model PurchaseOrderLine {
+  id            String        @id
+  poId          String
+  itemId        String
+  qty           Decimal       @db.Decimal(16, 4)
+  unitPrice     Decimal       @db.Decimal(12, 2)
+  totalAmount   Decimal       @db.Decimal(16, 2)
+  createdAt     DateTime      @default(now())
+  Item          Item          @relation(fields: [itemId], references: [id])
+  PurchaseOrder PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+}
+
+model Recipe {
+  id              String            @id
+  code            String            @unique
+  name            String
+  description     String?
+  yieldQty        Decimal           @default(1) @db.Decimal(16, 4)
+  yieldUom        String            @default("piece")
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime
+  ProductionOrder ProductionOrder[]
+  RecipeLine      RecipeLine[]
+}
+
+model RecipeLine {
+  id        String   @id
+  recipeId  String
+  itemId    String
+  qty       Decimal  @db.Decimal(16, 4)
+  uom       String
+  createdAt DateTime @default(now())
+  Item      Item     @relation(fields: [itemId], references: [id])
+  Recipe    Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
 }
 
 model RoomCharge {
-  id        String   @id @default(cuid())
-  folioId   String
-  folio     Folio    @relation(fields: [folioId], references: [id], onDelete: Cascade)
-  
+  id          String   @id
+  folioId     String
   description String
-  amount    Decimal  @db.Decimal(16, 2)
-  category  String   // minibar, dining, laundry, etc.
-  
-  createdAt DateTime @default(now())
+  amount      Decimal  @db.Decimal(16, 2)
+  category    String
+  createdAt   DateTime @default(now())
+  Folio       Folio    @relation(fields: [folioId], references: [id], onDelete: Cascade)
 }
 
-// ============ DELIVERY ============
-
-model Driver {
-  id        String   @id @default(cuid())
-  code      String   @unique
-  name      String   // e.g., "محمد عبده" (Mohammad Abdo)
-  phone     String
-  vehicleType String?  // motorcycle, car, bicycle
-  vehicleNumber String?
-  status    String   @default("available") // available, busy, offline
-  createdAt DateTime @default(now())
-
-  deliveries DeliveryOrder[]
+model StockBatch {
+  id          String        @id
+  itemId      String
+  lotNumber   String?
+  expiryDate  DateTime?
+  receivedAt  DateTime      @default(now())
+  qtyOnHand   Decimal       @default(0) @db.Decimal(16, 4)
+  costPrice   Decimal       @db.Decimal(12, 2)
+  createdAt   DateTime      @default(now())
+  warehouseId String
+  Item        Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  Warehouse   Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  StockLedger StockLedger[]
 }
 
-model DeliveryArea {
-  id            String   @id @default(cuid())
-  code          String   @unique
-  name          String   // e.g., "المعادي"
-  deliveryFee   Decimal  @db.Decimal(10, 2)
-  estimatedTime Int      // in minutes
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  orders DeliveryOrder[]
+model StockCount {
+  id             String           @id
+  countNumber    String           @unique
+  warehouseId    String
+  status         String           @default("scheduled")
+  countDate      DateTime         @default(now())
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime
+  Warehouse      Warehouse        @relation(fields: [warehouseId], references: [id])
+  StockCountLine StockCountLine[]
 }
 
-model DeliveryOrder {
-  id        String   @id @default(cuid())
-  orderNumber String @unique
-  
-  driverId  String?
-  driver    Driver?  @relation(fields: [driverId], references: [id], onDelete: SetNull)
-  
-  areaId    String?
-  area      DeliveryArea? @relation(fields: [areaId], references: [id], onDelete: SetNull)
-  
-  customerName String
-  customerPhone String
-  deliveryAddress String
-  deliveryFee Decimal  @db.Decimal(10, 2) @default(0)
-  
-  status    String   @default("unassigned") // unassigned, assigned, picked, on_way, delivered, failed
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model StockCountLine {
+  id          String     @id
+  countId     String
+  itemId      String
+  physical    Decimal    @db.Decimal(16, 4)
+  system      Decimal    @db.Decimal(16, 4)
+  createdAt   DateTime   @default(now())
+  warehouseId String
+  StockCount  StockCount @relation(fields: [countId], references: [id], onDelete: Cascade)
 }
 
-// ============ AUDIT & SYNC ============
+model StockLedger {
+  id           String      @id
+  itemId       String
+  warehouseId  String
+  batchId      String?
+  movementType String
+  reference    String?
+  qty          Decimal     @db.Decimal(16, 4)
+  costAmount   Decimal     @default(0) @db.Decimal(16, 2)
+  createdAt    DateTime    @default(now())
+  StockBatch   StockBatch? @relation(fields: [batchId], references: [id])
+  Item         Item        @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  Warehouse    Warehouse   @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+}
+
+model StockTransfer {
+  id                String              @id
+  transferNumber    String              @unique
+  fromWarehouseId   String
+  toWarehouseId     String
+  userId            String
+  status            String              @default("draft")
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime
+  Warehouse         Warehouse           @relation(fields: [fromWarehouseId], references: [id])
+  User              User                @relation(fields: [userId], references: [id])
+  StockTransferLine StockTransferLine[]
+}
+
+model StockTransferLine {
+  id            String        @id
+  transferId    String
+  itemId        String
+  qty           Decimal       @db.Decimal(16, 4)
+  createdAt     DateTime      @default(now())
+  StockTransfer StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+}
+
+model Supplier {
+  id            String          @id
+  code          String          @unique
+  name          String
+  contact       String?
+  createdAt     DateTime        @default(now())
+  PurchaseOrder PurchaseOrder[]
+}
 
 model SyncQueue {
-  id            String   @id @default(cuid())
-  idempotencyKey String  @unique // for deduplication
-  operation     String   // create_order, create_transfer, etc.
-  entityId      String?
-  entityType    String?
-  
-  payload       Json
-  status        String   @default("pending") // pending, synced, failed
-  retryCount    Int      @default(0)
-  
-  createdAt     DateTime @default(now())
-  processedAt   DateTime?
+  id             String    @id
+  idempotencyKey String    @unique
+  operation      String
+  entityId       String?
+  entityType     String?
+  payload        Json
+  status         String    @default("pending")
+  retryCount     Int       @default(0)
+  createdAt      DateTime  @default(now())
+  processedAt    DateTime?
 }
-
-model AuditLog {
-  id        String   @id @default(cuid())
-  userId    String?
-  action    String   // created, updated, deleted
-  entity    String   // Order, Transfer, etc.
-  entityId  String
-  
-  oldValues Json?
-  newValues Json?
-  
-  createdAt DateTime @default(now())
-}
-
-// ============ SYSTEM SETTINGS ============
 
 model SystemSettings {
-  id        String   @id @default(cuid())
-  key       String   @unique // business_info, tax_config, system_config, notification_config
-  value     Json     // stores the configuration as JSON
-  
+  id        String   @id
+  key       String   @unique
+  value     Json
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime
+}
+
+model TableArea {
+  id          String        @id
+  code        String        @unique
+  name        String
+  createdAt   DateTime      @default(now())
+  DineInTable DineInTable[]
+}
+
+model Tax {
+  id        String   @id
+  code      String   @unique
+  name      String
+  rate      Decimal  @db.Decimal(5, 2)
+  createdAt DateTime @default(now())
+}
+
+model User {
+  id              String            @id
+  email           String            @unique
+  name            String?
+  password        String?
+  role            String            @default("staff")
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime
+  PosOrder        PosOrder[]
+  ProductionOrder ProductionOrder[]
+  StockTransfer   StockTransfer[]
+}
+
+model Warehouse {
+  id            String          @id
+  code          String          @unique
+  name          String
+  type          String          @default("storage")
+  createdAt     DateTime        @default(now())
+  StockBatch    StockBatch[]
+  StockCount    StockCount[]
+  StockLedger   StockLedger[]
+  StockTransfer StockTransfer[]
 }
