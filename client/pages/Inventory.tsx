@@ -185,6 +185,12 @@ export default function Inventory() {
         
         // Fetch stock summary from API
         const response = await fetch('/api/inventory/stock-summary');
+        
+        if (!response.ok) {
+          console.error(`Stock summary API error: ${response.status}`);
+          throw new Error(`فشل تحميل بيانات المخزون (${response.status})`);
+        }
+        
         const data = await response.json();
         
         // Map API data to component format

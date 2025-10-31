@@ -90,12 +90,18 @@ export default function GoodsReceipt() {
       if (!response.ok) {
         let errorMessage = "فشل إنشاء محضر الاستلام";
         try {
+          // Clone response to allow reading it as text if JSON parsing fails
+          const clonedResponse = response.clone();
           const error = await response.json();
           errorMessage = error.error || error.message || errorMessage;
         } catch {
-          // If response is not JSON, get text
-          const text = await response.text();
-          console.error("Server error:", text);
+          // If response is not JSON, get text from the clone
+          try {
+            const text = await response.text();
+            console.error("Server error (non-JSON):", text.substring(0, 200));
+          } catch (textError) {
+            console.error("Could not read error response");
+          }
           errorMessage = `خطأ في السيرفر (${response.status})`;
         }
         throw new Error(errorMessage);
