@@ -88,8 +88,17 @@ export default function GoodsReceipt() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "فشل إنشاء محضر الاستلام");
+        let errorMessage = "فشل إنشاء محضر الاستلام";
+        try {
+          const error = await response.json();
+          errorMessage = error.error || error.message || errorMessage;
+        } catch {
+          // If response is not JSON, get text
+          const text = await response.text();
+          console.error("Server error:", text);
+          errorMessage = `خطأ في السيرفر (${response.status})`;
+        }
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
@@ -102,6 +111,7 @@ export default function GoodsReceipt() {
       setSupplierName("");
       setLines([{ sku: "", qty: 0, unitCost: 0, lotNumber: "", expiryDate: "" }]);
     } catch (err: any) {
+      console.error("GRN Error:", err);
       toast({
         variant: "destructive",
         title: "خطأ",
