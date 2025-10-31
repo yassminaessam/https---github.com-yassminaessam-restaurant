@@ -158,8 +158,8 @@ model PurchaseOrderLine {
 model GoodsReceiptNote {
   id          String   @id @default(cuid())
   grnNumber   String   @unique
-  poId        String   @unique
-  po          PurchaseOrder @relation(fields: [poId], references: [id])
+  poId        String?  @unique
+  po          PurchaseOrder? @relation(fields: [poId], references: [id])
   
   warehouseId String
   status      String   @default("draft") // draft, posted, cancelled

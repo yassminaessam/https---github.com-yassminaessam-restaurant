@@ -19,7 +19,7 @@ export const createGRN: RequestHandler = async (req, res) => {
     const grn = await prisma.goodsReceiptNote.create({
       data: {
         grnNumber: `GRN-${Date.now()}`,
-        poId: null as any, // Optional: link to PO if exists
+        poId: null,
         warehouseId: warehouse.id,
         status: "posted",
         grnDate: new Date(),
