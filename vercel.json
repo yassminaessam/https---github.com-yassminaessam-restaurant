@@ -1,12 +1,13 @@
 {
   "version": 2,
-  "env": {
-    "NODE_ENV": "production"
-  },
-  "buildCommand": "pnpm run build",
+  "buildCommand": "prisma generate && pnpm run build:client",
   "outputDirectory": "dist/spa",
   "installCommand": "pnpm install",
-  "framework": null,
+  "functions": {
+    "api/**/*.ts": {
+      "runtime": "nodejs20.x"
+    }
+  },
   "rewrites": [
     {
       "source": "/api/:path*",
