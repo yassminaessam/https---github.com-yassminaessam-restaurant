@@ -5,6 +5,9 @@ import { getPrisma } from "../lib/prisma";
 // Body: { warehouseCode, supplierName?, items: [{ sku, qty, unitCost?, lotNumber?, expiryDate? }] }
 export const createGRN: RequestHandler = async (req, res) => {
   try {
+    console.log('=== GRN CREATE START ===');
+    console.log('DATABASE_URL exists:', !!process.env.DATABASE_URL);
+    
     const prisma = getPrisma();
     const { warehouseCode, supplierName, items } = req.body;
 
@@ -74,7 +77,15 @@ export const createGRN: RequestHandler = async (req, res) => {
     console.log('GRN completed successfully');
     return res.status(200).json({ grnNumber: grn.grnNumber, id: grn.id });
   } catch (err: any) {
-    console.error("GRN error:", err);
-    return res.status(500).json({ error: err.message || "Failed to create GRN", details: err.toString() });
+    console.error("=== GRN ERROR ===");
+    console.error("Error name:", err.name);
+    console.error("Error message:", err.message);
+    console.error("Error stack:", err.stack);
+    console.error("DATABASE_URL exists:", !!process.env.DATABASE_URL);
+    return res.status(500).json({ 
+      error: err.message || "Failed to create GRN", 
+      details: err.toString(),
+      name: err.name 
+    });
   }
 };

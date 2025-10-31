@@ -93,12 +93,21 @@ export default function GoodsReceipt() {
           // Clone response to allow reading it as text if JSON parsing fails
           const clonedResponse = response.clone();
           const error = await response.json();
+          console.error("Server returned error:", error);
           errorMessage = error.error || error.message || errorMessage;
+          
+          // Show more details in console
+          if (error.details) {
+            console.error("Error details:", error.details);
+          }
+          if (error.name) {
+            console.error("Error type:", error.name);
+          }
         } catch {
           // If response is not JSON, get text from the clone
           try {
             const text = await response.text();
-            console.error("Server error (non-JSON):", text.substring(0, 200));
+            console.error("Server error (non-JSON):", text.substring(0, 500));
           } catch (textError) {
             console.error("Could not read error response");
           }
