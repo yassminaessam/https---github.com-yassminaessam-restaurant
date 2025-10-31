@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { handleDemo } from "./routes/demo";
+import { getDbHealth } from "./routes/health";
 import { getTopology, getItems } from "./routes/inventory";
 import { createGRN } from "./routes/grn";
 import { createTransfer } from "./routes/transfer";
@@ -104,6 +105,7 @@ export function createServer() {
   });
 
   app.get("/api/demo", handleDemo);
+  app.get("/api/db/health", getDbHealth);
   app.get("/api/inventory/topology", getTopology);
   app.get("/api/inventory/items", getItems);
   
