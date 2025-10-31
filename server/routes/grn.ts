@@ -49,27 +49,12 @@ export const createGRN: RequestHandler = async (req, res) => {
         },
       });
 
-      // Create or find batch
-      let batch = null;
-      if (lotNumber || expiryDate) {
-        batch = await prisma.stockBatch.create({
-          data: {
-            itemId: item.id,
-            warehouseId: warehouse.id,
-            lotNumber: lotNumber || null,
-            expiryDate: expiryDate ? new Date(expiryDate) : null,
-            qtyOnHand: qty,
-            costPrice: unitCost || 0,
-          },
-        });
-      }
-
       // Record stock ledger entry (IN)
       await prisma.stockLedger.create({
         data: {
           itemId: item.id,
           warehouseId: warehouse.id,
-          batchId: batch?.id || null,
+          batchId: null,
           movementType: "in",
           reference: grn.grnNumber,
           qty,
