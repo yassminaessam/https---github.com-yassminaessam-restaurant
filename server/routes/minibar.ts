@@ -1,5 +1,6 @@
 import { RequestHandler } from "express";
 import { getPrisma } from "../lib/prisma";
+import crypto from "crypto";
 
 // Get all hotel rooms
 export const getHotelRooms: RequestHandler = async (req, res) => {
@@ -7,12 +8,12 @@ export const getHotelRooms: RequestHandler = async (req, res) => {
     const prisma = getPrisma();
     const rooms = await prisma.hotelRoom.findMany({
       include: {
-        folios: {
+        Folio: {
           where: {
-            status: 'OPEN'
+            status: 'open'
           },
           include: {
-            charges: true
+            RoomCharge: true
           }
         }
       },
@@ -53,14 +54,11 @@ export const getFolioByRoom: RequestHandler = async (req, res) => {
     const folio = await prisma.folio.findFirst({
       where: {
         roomId,
-        status: 'OPEN'
+        status: 'open'
       },
       include: {
-        room: true,
-        charges: {
-          include: {
-            item: true
-          },
+        HotelRoom: true,
+        RoomCharge: {
           orderBy: { createdAt: 'desc' }
         }
       }
@@ -79,13 +77,14 @@ export const createFolio: RequestHandler = async (req, res) => {
     const prisma = getPrisma();
     const folio = await prisma.folio.create({
       data: {
+        id: crypto.randomUUID(),
         ...req.body,
-        status: 'OPEN',
-        totalAmount: 0
+        status: 'open',
+        balance: 0
       },
       include: {
-        room: true,
-        charges: true
+        HotelRoom: true,
+        RoomCharge: true
       }
     });
 
@@ -106,15 +105,11 @@ export const addChargeToFolio: RequestHandler = async (req, res) => {
       // Create room charge
       const charge = await tx.roomCharge.create({
         data: {
+          id: crypto.randomUUID(),
           folioId,
-          itemId,
-          quantity,
-          unitPrice,
-          totalPrice: quantity * unitPrice,
-          chargeType: 'MINIBAR'
-        },
-        include: {
-          item: true
+          description: `Item ${itemId}`,
+          amount: quantity * unitPrice,
+          category: 'MINIBAR'
         }
       });
 
@@ -122,17 +117,13 @@ export const addChargeToFolio: RequestHandler = async (req, res) => {
       const folio = await tx.folio.update({
         where: { id: folioId },
         data: {
-          totalAmount: {
-            increment: charge.totalPrice
+          balance: {
+            increment: Number(charge.amount)
           }
         },
         include: {
-          room: true,
-          charges: {
-            include: {
-              item: true
-            }
-          }
+          HotelRoom: true,
+          RoomCharge: true
         }
       });
 
@@ -140,12 +131,15 @@ export const addChargeToFolio: RequestHandler = async (req, res) => {
       if (warehouseId) {
         await tx.stockLedger.create({
           data: {
-            warehouseId,
+            id: crypto.randomUUID(),
             itemId,
-            quantity: -quantity,
-            transactionType: 'MINIBAR_SALE',
-            referenceId: charge.id,
-            notes: `Minibar charge for room ${folio.room.roomNumber}`
+            warehouseId,
+            txnType: 'minibar_sale',
+            qty: -quantity,
+            refType: 'room_charge',
+            refId: charge.id,
+            txnDate: new Date(),
+            notes: `Minibar charge for room ${folio.HotelRoom.roomNumber}`
           }
         });
       }
@@ -172,8 +166,8 @@ export const closeFolio: RequestHandler = async (req, res) => {
       const currentFolio = await tx.folio.findUnique({
         where: { id },
         include: {
-          room: true,
-          charges: true
+          HotelRoom: true,
+          RoomCharge: true
         }
       });
 
@@ -181,31 +175,16 @@ export const closeFolio: RequestHandler = async (req, res) => {
         throw new Error("Folio not found");
       }
 
-      // Create payment record
-      await tx.payment.create({
-        data: {
-          amount: currentFolio.totalAmount,
-          paymentMethod: paymentMethod || 'CASH',
-          referenceType: 'FOLIO',
-          referenceId: id,
-          notes: `Room ${currentFolio.room.roomNumber} checkout`
-        }
-      });
-
       // Close the folio
       const closedFolio = await tx.folio.update({
         where: { id },
         data: {
-          status: 'CLOSED',
-          closedAt: new Date()
+          status: 'closed',
+          checkOut: new Date()
         },
         include: {
-          room: true,
-          charges: {
-            include: {
-              item: true
-            }
-          }
+          HotelRoom: true,
+          RoomCharge: true
         }
       });
 
@@ -213,8 +192,7 @@ export const closeFolio: RequestHandler = async (req, res) => {
       await tx.hotelRoom.update({
         where: { id: currentFolio.roomId },
         data: {
-          status: 'AVAILABLE',
-          currentGuestName: null
+          status: 'available'
         }
       });
 

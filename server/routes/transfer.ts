@@ -1,4 +1,5 @@
 import type { RequestHandler } from "express";
+import { v4 as uuid } from "uuid";
 import { getPrisma } from "../lib/prisma";
 import { allocateStockFEFO, updateBatchQuantities, checkStockAvailability } from "../lib/fefo";
 
@@ -23,18 +24,20 @@ export const createTransfer: RequestHandler = async (req, res) => {
       user = await prisma.user.findFirst();
       if (!user) {
         user = await prisma.user.create({
-          data: { email: "system@restaurant.local", name: "System", password: null, role: "admin" },
+          data: { id: uuid(), email: "system@restaurant.local", name: "System", password: null, role: "admin", updatedAt: new Date() },
         });
       }
     }
 
     const transfer = await prisma.stockTransfer.create({
       data: {
+        id: uuid(),
         transferNumber: `TR-${Date.now()}`,
         fromWarehouseId: fromWh.id,
         toWarehouseId: toWh.id,
         userId: user.id,
         status: "closed",
+        updatedAt: new Date(),
       },
     });
 
@@ -59,7 +62,7 @@ export const createTransfer: RequestHandler = async (req, res) => {
       }
 
       await prisma.stockTransferLine.create({
-        data: { transferId: transfer.id, itemId: item.id, qty },
+        data: { id: uuid(), transferId: transfer.id, itemId: item.id, qty },
       });
 
       // Use FEFO allocation from source warehouse
@@ -77,6 +80,7 @@ export const createTransfer: RequestHandler = async (req, res) => {
         // Deduct from source (OUT)
         await prisma.stockLedger.create({
           data: {
+            id: uuid(),
             itemId: item.id,
             warehouseId: fromWh.id,
             batchId: allocation.batchId,
@@ -90,6 +94,7 @@ export const createTransfer: RequestHandler = async (req, res) => {
         // Add to destination (IN)
         await prisma.stockLedger.create({
           data: {
+            id: uuid(),
             itemId: item.id,
             warehouseId: toWh.id,
             batchId: allocation.batchId,

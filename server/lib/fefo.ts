@@ -47,14 +47,14 @@ export async function allocateStockFEFO(params: {
   for (const batch of batches) {
     if (remainingQty <= 0) break;
 
-    const qtyToAllocate = Math.min(batch.qtyOnHand, remainingQty);
+    const qtyToAllocate = Math.min(Number(batch.qtyOnHand), remainingQty);
 
     allocations.push({
       batchId: batch.id,
       qty: qtyToAllocate,
       lotNumber: batch.lotNumber,
       expiryDate: batch.expiryDate,
-      costPrice: batch.costPrice,
+      costPrice: Number(batch.costPrice),
     });
 
     remainingQty -= qtyToAllocate;
@@ -106,8 +106,8 @@ export async function getStockSummary(warehouseId?: string) {
   const ledgerEntries = await prisma.stockLedger.findMany({
     where,
     include: {
-      item: true,
-      warehouse: true,
+      Item: true,
+      Warehouse: true,
     },
   });
 
@@ -117,16 +117,17 @@ export async function getStockSummary(warehouseId?: string) {
     if (!acc[key]) {
       acc[key] = {
         itemId: entry.itemId,
-        itemName: entry.item.name,
-        itemSku: entry.item.sku,
+        itemName: entry.Item.name,
+        itemSku: entry.Item.sku,
         warehouseId: entry.warehouseId,
-        warehouseName: entry.warehouse.name,
+        warehouseName: entry.Warehouse.name,
         totalQty: 0,
         totalValue: 0,
       };
     }
-    acc[key].totalQty += entry.qty;
-    acc[key].totalValue += entry.costAmount || 0;
+    // Convert Decimal to number
+    acc[key].totalQty += Number(entry.qty);
+    acc[key].totalValue += Number(entry.costAmount || 0);
     return acc;
   }, {});
 
@@ -155,7 +156,7 @@ export async function checkStockAvailability(params: {
     },
   });
 
-  const currentStock = ledgerSum._sum.qty || 0;
+  const currentStock = Number(ledgerSum._sum.qty || 0);
 
   return {
     available: currentStock >= qtyNeeded,

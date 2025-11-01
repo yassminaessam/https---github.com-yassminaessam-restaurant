@@ -7,7 +7,7 @@ export const getStockSummaryReport: RequestHandler = async (req, res) => {
   try {
     const { warehouseId } = req.query;
     const summary = await getStockSummary(warehouseId as string | undefined);
-    res.json({ summary });
+    res.json(summary); // Return array directly for frontend compatibility
   } catch (err: any) {
     console.error("Stock summary error:", err);
     res.status(500).json({ error: err.message || "Failed to get stock summary" });
@@ -24,24 +24,24 @@ export const getRecentMovements: RequestHandler = async (req, res) => {
       take: limit,
       orderBy: { createdAt: "desc" },
       include: {
-        item: true,
-        warehouse: true,
-        batch: true,
+        Item: true,
+        Warehouse: true,
+        StockBatch: true,
       },
     });
 
     const formattedMovements = movements.map((m) => ({
       id: m.id,
       date: m.createdAt.toISOString().split("T")[0],
-      itemName: m.item.name,
-      itemSku: m.item.sku,
-      warehouse: m.warehouse.name,
+      itemName: m.Item.name,
+      itemSku: m.Item.sku,
+      warehouse: m.Warehouse.name,
       movementType: m.movementType,
-      qty: m.qty,
+      qty: Number(m.qty),
       reference: m.reference,
-      lotNumber: m.batch?.lotNumber || null,
-      expiryDate: m.batch?.expiryDate || null,
-      costAmount: m.costAmount,
+      lotNumber: m.StockBatch?.lotNumber || null,
+      expiryDate: m.StockBatch?.expiryDate || null,
+      costAmount: Number(m.costAmount),
     }));
 
     res.json({ movements: formattedMovements });

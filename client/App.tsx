@@ -25,6 +25,7 @@ import StockTransfer from "./pages/StockTransfer";
 import POSSale from "./pages/POSSale";
 import StockRecords from "./pages/StockRecords";
 import InventoryReports from "./pages/InventoryReports";
+import DatabaseTest from "./pages/DatabaseTest";
 
 const queryClient = new QueryClient();
 
@@ -168,6 +169,14 @@ const App = () => (
             element={
               <Layout>
                 <InventoryReports />
+              </Layout>
+            }
+          />
+          <Route
+            path="/db-test"
+            element={
+              <Layout>
+                <DatabaseTest />
               </Layout>
             }
           />

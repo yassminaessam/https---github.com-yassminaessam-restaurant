@@ -1,4 +1,5 @@
 import type { RequestHandler } from "express";
+import { v4 as uuid } from "uuid";
 import { getPrisma } from "../lib/prisma";
 import { allocateStockFEFO, updateBatchQuantities, checkStockAvailability } from "../lib/fefo";
 
@@ -58,6 +59,7 @@ export const createSale: RequestHandler = async (req, res) => {
       taxAmount += lineTax;
 
       orderItems.push({
+        id: uuid(),
         itemId: item.id,
         qty,
         unitPrice,
@@ -80,6 +82,7 @@ export const createSale: RequestHandler = async (req, res) => {
       for (const allocation of allocations) {
         await prisma.stockLedger.create({
           data: {
+            id: uuid(),
             itemId: item.id,
             warehouseId: warehouse.id,
             batchId: allocation.batchId,
@@ -96,6 +99,7 @@ export const createSale: RequestHandler = async (req, res) => {
 
     const order = await prisma.posOrder.create({
       data: {
+        id: uuid(),
         orderNumber: `ORD-${Date.now()}`,
         type: roomNumber ? "dine_in" : "takeaway",
         status: "paid",
@@ -106,10 +110,12 @@ export const createSale: RequestHandler = async (req, res) => {
         total,
         customerName: customerName || null,
         customerPhone: roomNumber || null,
+        updatedAt: new Date(),
         paidAt: new Date(),
         items: { create: orderItems },
         payments: {
           create: {
+            id: uuid(),
             method: paymentMethod || "cash",
             amount: total,
             reference: roomNumber || null,

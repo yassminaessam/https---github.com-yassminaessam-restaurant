@@ -51,10 +51,10 @@ export const getPurchaseOrders: RequestHandler = async (req, res) => {
     const prisma = getPrisma();
     const orders = await prisma.purchaseOrder.findMany({
       include: {
-        supplier: true,
-        lines: {
+        Supplier: true,
+        PurchaseOrderLine: {
           include: {
-            item: true
+            Item: true
           }
         }
       },
@@ -79,21 +79,20 @@ export const createPurchaseOrder: RequestHandler = async (req, res) => {
         data: {
           ...orderData,
           supplierId,
-          lines: {
+          PurchaseOrderLine: {
             create: lines.map((line: any) => ({
               itemId: line.itemId,
-              quantity: line.quantity,
+              qty: line.quantity,
               unitPrice: line.unitPrice,
-              taxAmount: line.taxAmount || 0,
-              totalPrice: line.totalPrice
+              totalAmount: line.totalPrice
             }))
           }
         },
         include: {
-          supplier: true,
-          lines: {
+          Supplier: true,
+          PurchaseOrderLine: {
             include: {
-              item: true
+              Item: true
             }
           }
         }
@@ -120,10 +119,10 @@ export const updatePurchaseOrderStatus: RequestHandler = async (req, res) => {
       where: { id },
       data: { status },
       include: {
-        supplier: true,
-        lines: {
+        Supplier: true,
+        PurchaseOrderLine: {
           include: {
-            item: true
+            Item: true
           }
         }
       }

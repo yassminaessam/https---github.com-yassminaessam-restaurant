@@ -88,6 +88,13 @@ import {
   changePassword,
   getUserActivity,
 } from "./routes/users";
+import {
+  seedTestData,
+  clearTestData,
+  getDbStats,
+  performanceTest,
+  getAllData,
+} from "./routes/db-test";
 
 export function createServer() {
   const app = express();
@@ -199,6 +206,13 @@ export function createServer() {
   app.delete("/api/users/:id", deleteUser);
   app.post("/api/users/:id/change-password", changePassword);
   app.get("/api/users/:id/activity", getUserActivity);
+
+  // Database Testing
+  app.post("/api/db-test/seed", seedTestData);
+  app.post("/api/db-test/clear", clearTestData);
+  app.get("/api/db-test/stats", getDbStats);
+  app.get("/api/db-test/performance", performanceTest);
+  app.get("/api/db-test/data", getAllData);
 
   return app;
 }

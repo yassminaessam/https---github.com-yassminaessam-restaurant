@@ -1,5 +1,6 @@
 import { RequestHandler } from "express";
 import { getPrisma } from "../lib/prisma";
+import crypto from "crypto";
 
 // Get all recipes
 export const getRecipes: RequestHandler = async (req, res) => {
@@ -7,12 +8,11 @@ export const getRecipes: RequestHandler = async (req, res) => {
     const prisma = getPrisma();
     const recipes = await prisma.recipe.findMany({
       include: {
-        lines: {
+        RecipeLine: {
           include: {
-            item: true
+            Item: true
           }
-        },
-        outputItem: true
+        }
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -33,21 +33,20 @@ export const createRecipe: RequestHandler = async (req, res) => {
       const newRecipe = await tx.recipe.create({
         data: {
           ...recipeData,
-          outputItemId,
-          lines: {
+          RecipeLine: {
             create: lines.map((line: any) => ({
               itemId: line.itemId,
-              quantity: line.quantity
+              qty: line.quantity,
+              uom: line.uom || recipeData.yieldUom || 'piece'
             }))
           }
         },
         include: {
-          lines: {
+          RecipeLine: {
             include: {
-              item: true
+              Item: true
             }
-          },
-          outputItem: true
+          }
         }
       });
 
@@ -67,18 +66,16 @@ export const getProductionOrders: RequestHandler = async (req, res) => {
     const prisma = getPrisma();
     const orders = await prisma.productionOrder.findMany({
       include: {
-        recipe: {
+        Recipe: {
           include: {
-            outputItem: true,
-            lines: {
+            RecipeLine: {
               include: {
-                item: true
+                Item: true
               }
             }
           }
         },
-        sourceWarehouse: true,
-        destinationWarehouse: true
+        User: true
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -101,24 +98,21 @@ export const createProductionOrder: RequestHandler = async (req, res) => {
         data: {
           ...orderData,
           recipeId,
-          sourceWarehouseId,
-          destinationWarehouseId,
-          batchSize,
-          status: 'PENDING'
+          userId: req.body.userId || 'SYSTEM',
+          plannedQty: batchSize,
+          status: 'draft'
         },
         include: {
-          recipe: {
+          Recipe: {
             include: {
-              outputItem: true,
-              lines: {
+              RecipeLine: {
                 include: {
-                  item: true
+                  Item: true
                 }
               }
             }
           },
-          sourceWarehouse: true,
-          destinationWarehouse: true
+          User: true
         }
       });
 
@@ -143,10 +137,9 @@ export const completeProductionOrder: RequestHandler = async (req, res) => {
       const productionOrder = await tx.productionOrder.findUnique({
         where: { id },
         include: {
-          recipe: {
+          Recipe: {
             include: {
-              lines: true,
-              outputItem: true
+              RecipeLine: true
             }
           }
         }
@@ -157,55 +150,43 @@ export const completeProductionOrder: RequestHandler = async (req, res) => {
       }
 
       // Deduct ingredients from source warehouse
-      for (const line of productionOrder.recipe.lines) {
-        const quantityNeeded = line.quantity * productionOrder.batchSize;
+      for (const line of productionOrder.Recipe.RecipeLine) {
+        const quantityNeeded = Number(line.qty) * Number(productionOrder.plannedQty);
 
         // Create stock ledger entry for consumption
         await tx.stockLedger.create({
           data: {
-            warehouseId: productionOrder.sourceWarehouseId,
+            id: crypto.randomUUID(),
             itemId: line.itemId,
-            quantity: -quantityNeeded,
-            transactionType: 'PRODUCTION_CONSUME',
-            referenceId: id,
-            notes: `Production order ${productionOrder.orderNumber}`
+            warehouseId: 'KITCHEN',
+            txnType: 'production_consume',
+            qty: -quantityNeeded,
+            refType: 'production_order',
+            refId: id,
+            txnDate: new Date(),
+            notes: `Production order ${productionOrder.poNumber}`
           }
         });
       }
-
-      // Add produced items to destination warehouse
-      const outputQuantity = productionOrder.recipe.outputQuantity * productionOrder.batchSize;
-      await tx.stockLedger.create({
-        data: {
-          warehouseId: productionOrder.destinationWarehouseId,
-          itemId: productionOrder.recipe.outputItemId,
-          quantity: outputQuantity,
-          transactionType: 'PRODUCTION_OUTPUT',
-          referenceId: id,
-          notes: `Production order ${productionOrder.orderNumber}`
-        }
-      });
 
       // Update production order status
       const updatedOrder = await tx.productionOrder.update({
         where: { id },
         data: {
-          status: 'COMPLETED',
-          completedAt: new Date()
+          status: 'completed',
+          actualQty: productionOrder.plannedQty
         },
         include: {
-          recipe: {
+          Recipe: {
             include: {
-              outputItem: true,
-              lines: {
+              RecipeLine: {
                 include: {
-                  item: true
+                  Item: true
                 }
               }
             }
           },
-          sourceWarehouse: true,
-          destinationWarehouse: true
+          User: true
         }
       });
 
@@ -228,13 +209,12 @@ export const getRecipeIngredients: RequestHandler = async (req, res) => {
     const ingredients = await prisma.recipeLine.findMany({
       where: { recipeId },
       include: {
-        item: {
+        Item: {
           select: {
             id: true,
             name: true,
             sku: true,
-            avgCost: true,
-            uom: true
+            baseUom: true
           }
         }
       }
@@ -256,19 +236,19 @@ export const addRecipeIngredient: RequestHandler = async (req, res) => {
     
     const ingredient = await prisma.recipeLine.create({
       data: {
+        id: crypto.randomUUID(),
         recipeId,
         itemId,
-        quantity: parseFloat(quantity),
-        uom: uom || undefined
+        qty: parseFloat(quantity),
+        uom: uom || 'piece'
       },
       include: {
-        item: {
+        Item: {
           select: {
             id: true,
             name: true,
             sku: true,
-            avgCost: true,
-            uom: true
+            baseUom: true
           }
         }
       }
@@ -291,17 +271,16 @@ export const updateRecipeIngredient: RequestHandler = async (req, res) => {
     const ingredient = await prisma.recipeLine.update({
       where: { id: ingredientId },
       data: {
-        quantity: quantity ? parseFloat(quantity) : undefined,
+        qty: quantity ? parseFloat(quantity) : undefined,
         uom: uom || undefined
       },
       include: {
-        item: {
+        Item: {
           select: {
             id: true,
             name: true,
             sku: true,
-            avgCost: true,
-            uom: true
+            baseUom: true
           }
         }
       }
@@ -342,12 +321,11 @@ export const updateRecipe: RequestHandler = async (req, res) => {
       where: { id },
       data: updateData,
       include: {
-        lines: {
+        RecipeLine: {
           include: {
-            item: true
+            Item: true
           }
-        },
-        outputItem: true
+        }
       }
     });
     
@@ -369,18 +347,16 @@ export const updateProductionOrder: RequestHandler = async (req, res) => {
       where: { id },
       data: updateData,
       include: {
-        recipe: {
+        Recipe: {
           include: {
-            outputItem: true,
-            lines: {
+            RecipeLine: {
               include: {
-                item: true
+                Item: true
               }
             }
           }
         },
-        sourceWarehouse: true,
-        destinationWarehouse: true
+        User: true
       }
     });
     
@@ -400,22 +376,19 @@ export const startProductionOrder: RequestHandler = async (req, res) => {
     const order = await prisma.productionOrder.update({
       where: { id },
       data: { 
-        status: 'in_progress',
-        startedAt: new Date()
+        status: 'in_progress'
       },
       include: {
-        recipe: {
+        Recipe: {
           include: {
-            outputItem: true,
-            lines: {
+            RecipeLine: {
               include: {
-                item: true
+                Item: true
               }
             }
           }
         },
-        sourceWarehouse: true,
-        destinationWarehouse: true
+        User: true
       }
     });
     

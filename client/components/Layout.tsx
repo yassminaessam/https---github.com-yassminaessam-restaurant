@@ -16,6 +16,7 @@ import {
   ArrowRightLeft,
   DollarSign,
   ClipboardList,
+  Database,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -128,6 +129,12 @@ const navItems: NavItem[] = [
     icon: <Settings className="w-5 h-5" />,
     label: "الإعدادات",
     href: "/settings",
+    category: "settings",
+  },
+  {
+    icon: <Database className="w-5 h-5" />,
+    label: "اختبار قاعدة البيانات",
+    href: "/db-test",
     category: "settings",
   },
 ];

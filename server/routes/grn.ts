@@ -1,4 +1,5 @@
 import type { RequestHandler } from "express";
+import { v4 as uuid } from "uuid";
 import { getPrisma } from "../lib/prisma";
 
 // POST /api/inventory/grn
@@ -28,10 +29,12 @@ export const createGRN: RequestHandler = async (req, res) => {
     // Create GRN header
     const grn = await prisma.goodsReceiptNote.create({
       data: {
+        id: uuid(),
         grnNumber: `GRN-${Date.now()}`,
         warehouseId: warehouse.id,
         status: "posted",
         grnDate: new Date(),
+        updatedAt: new Date(),
       },
     });
 
@@ -51,6 +54,7 @@ export const createGRN: RequestHandler = async (req, res) => {
       // Create GRN line
       await prisma.goodsReceiptLine.create({
         data: {
+          id: uuid(),
           grnId: grn.id,
           itemId: item.id,
           qtyReceived: qty,
@@ -63,6 +67,7 @@ export const createGRN: RequestHandler = async (req, res) => {
       // Record stock ledger entry (IN)
       await prisma.stockLedger.create({
         data: {
+          id: uuid(),
           itemId: item.id,
           warehouseId: warehouse.id,
           batchId: null,
