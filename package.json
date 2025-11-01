@@ -12,11 +12,11 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "prisma generate && npm run build:client && npm run build:server",
+    "build": "prisma generate && npm run build:client",
     "build:client": "vite build",
     "build:server": "vite build --config vite.config.server.ts",
     "start": "node dist/server/node-build.mjs",
-    "vercel-build": "prisma generate && npm run build",
+    "vercel-build": "prisma generate && vite build",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init",
     "prisma:seed": "tsx prisma/seed.ts",
