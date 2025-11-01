@@ -100,38 +100,44 @@ export async function updateBatchQuantities(
 export async function getStockSummary(warehouseId?: string) {
   const prisma = getPrisma();
 
-  const where = warehouseId ? { warehouseId } : {};
+  try {
+    const where = warehouseId ? { warehouseId } : {};
 
-  // Aggregate stock ledger entries to get current stock levels
-  const ledgerEntries = await prisma.stockLedger.findMany({
-    where,
-    include: {
-      Item: true,
-      Warehouse: true,
-    },
-  });
+    // Aggregate stock ledger entries to get current stock levels
+    const ledgerEntries = await prisma.stockLedger.findMany({
+      where,
+      include: {
+        Item: true,
+        Warehouse: true,
+      },
+    });
 
-  // Group by item and warehouse
-  const summary = ledgerEntries.reduce((acc: any, entry) => {
-    const key = `${entry.itemId}-${entry.warehouseId}`;
-    if (!acc[key]) {
-      acc[key] = {
-        itemId: entry.itemId,
-        itemName: entry.Item.name,
-        itemSku: entry.Item.sku,
-        warehouseId: entry.warehouseId,
-        warehouseName: entry.Warehouse.name,
-        totalQty: 0,
-        totalValue: 0,
-      };
-    }
-    // Convert Decimal to number
-    acc[key].totalQty += Number(entry.qty);
-    acc[key].totalValue += Number(entry.costAmount || 0);
-    return acc;
-  }, {});
+    // Group by item and warehouse
+    const summary = ledgerEntries.reduce((acc: any, entry) => {
+      const key = `${entry.itemId}-${entry.warehouseId}`;
+      if (!acc[key]) {
+        acc[key] = {
+          itemId: entry.itemId,
+          itemName: entry.Item.name,
+          itemSku: entry.Item.sku,
+          warehouseId: entry.warehouseId,
+          warehouseName: entry.Warehouse.name,
+          warehouseCode: entry.Warehouse.code,
+          totalQty: 0,
+          totalValue: 0,
+        };
+      }
+      // Convert Decimal to number
+      acc[key].totalQty += Number(entry.qty);
+      acc[key].totalValue += Number(entry.costAmount || 0);
+      return acc;
+    }, {});
 
-  return Object.values(summary);
+    return Object.values(summary);
+  } catch (error) {
+    console.error("Error in getStockSummary:", error);
+    throw error;
+  }
 }
 
 /**
