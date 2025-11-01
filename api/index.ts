@@ -11,7 +11,8 @@ let handler: any = null;
 export default async function (req: VercelRequest, res: VercelResponse) {
   try {
     if (!handler) {
-      const { createServer } = await import('../server/index.js');
+      // Use extensionless import so Vercel TypeScript builder can transpile server code
+      const { createServer } = await import('../server/index');
       const serverless = await import('serverless-http');
       const app = createServer();
       handler = serverless.default(app);
