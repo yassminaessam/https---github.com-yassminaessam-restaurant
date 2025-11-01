@@ -6,7 +6,7 @@ export const getDbHealth: RequestHandler = async (_req, res) => {
   try {
     const hasEnv = !!process.env.DATABASE_URL;
     const prisma = getPrisma();
-    const result = await prisma.$queryRawUnsafe<any>("SELECT 1 as ok");
+    const result = await prisma.$queryRawUnsafe("SELECT 1 as ok");
     return res.json({ env: hasEnv, db: "ok", result });
   } catch (err: any) {
     console.error("DB Health error:", err);

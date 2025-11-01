@@ -1,5 +1,6 @@
 import { RequestHandler } from "express";
 import { PrismaClient } from "@prisma/client";
+import { randomUUID } from "crypto";
 
 const prisma = new PrismaClient();
 
@@ -53,8 +54,8 @@ export const upsertSetting: RequestHandler = async (req, res) => {
 
     const setting = await prisma.systemSettings.upsert({
       where: { key },
-      update: { value },
-      create: { key, value },
+      update: { value, updatedAt: new Date() },
+      create: { id: randomUUID(), key, value, updatedAt: new Date() },
     });
 
     res.json({
@@ -82,8 +83,8 @@ export const updateSettings: RequestHandler = async (req, res) => {
       Object.entries(settings).map(([key, value]) =>
         prisma.systemSettings.upsert({
           where: { key },
-          update: { value: value as any },
-          create: { key, value: value as any },
+          update: { value: value as any, updatedAt: new Date() },
+          create: { id: randomUUID(), key, value: value as any, updatedAt: new Date() },
         })
       )
     );
@@ -150,8 +151,8 @@ export const initializeDefaultSettings: RequestHandler = async (req, res) => {
       Object.entries(defaultSettings).map(([key, value]) =>
         prisma.systemSettings.upsert({
           where: { key },
-          update: { value },
-          create: { key, value },
+          update: { value, updatedAt: new Date() },
+          create: { id: randomUUID(), key, value, updatedAt: new Date() },
         })
       )
     );
