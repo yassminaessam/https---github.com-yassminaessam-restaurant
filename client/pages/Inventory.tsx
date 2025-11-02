@@ -149,7 +149,7 @@ const sampleItems: InventoryItem[] = [
   },
 ];
 
-const warehouses = [
+const staticWarehouses = [
   { code: "all", name: "جميع المخازن", icon: Warehouse },
   { code: "RESTAURANT", name: "مخزن المطعم", icon: Building2 },
   { code: "CAFETERIA", name: "مخزن الكافتيريا", icon: Coffee },
@@ -178,16 +178,27 @@ export default function Inventory() {
   const [loading, setLoading] = useState(true);
   // Add item dialog state
   const [newWarehouse, setNewWarehouse] = useState<string | null>(null);
+  const [availableWarehouses, setAvailableWarehouses] = useState<Array<{ id: string; code: string; name: string }>>([]);
 
   // Fetch inventory data from API
   useEffect(() => {
     const fetchInventory = async () => {
       try {
         setLoading(true);
-        
-        // Fetch stock summary from API
-        const response = await fetch('/api/inventory/stock-summary');
-        
+        // Fetch topology and stock summary in parallel
+        const [topoResp, response] = await Promise.all([
+          fetch('/api/inventory/topology'),
+          fetch('/api/inventory/stock-summary')
+        ]);
+
+        if (topoResp.ok) {
+          const topo = await topoResp.json();
+          const ws = (topo?.warehouses ?? []).map((w: any) => ({ id: w.id, code: w.code, name: w.name }));
+          setAvailableWarehouses(ws);
+          // Set a sensible default for Add Item dialog
+          if (!newWarehouse && ws.length > 0) setNewWarehouse(ws[0].code);
+        }
+
         if (!response.ok) {
           console.error(`Stock summary API error: ${response.status}`);
           throw new Error(`فشل تحميل بيانات المخزون (${response.status})`);
@@ -430,17 +441,18 @@ export default function Inventory() {
                   <SelectValue placeholder="اختر المخزن" />
                 </SelectTrigger>
                 <SelectContent>
-                  {warehouses.map((warehouse) => {
-                    const Icon = warehouse.icon;
-                    return (
-                      <SelectItem key={warehouse.code} value={warehouse.code}>
-                        <div className="flex items-center gap-2">
-                          <Icon className="w-4 h-4" />
-                          {warehouse.name}
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
+                  {(availableWarehouses.length ? [{ code: "all", name: "جميع المخازن" }, ...availableWarehouses] : staticWarehouses)
+                    .map((warehouse: any) => {
+                      const Icon = (warehouse.icon ?? Warehouse);
+                      return (
+                        <SelectItem key={warehouse.code} value={warehouse.code}>
+                          <div className="flex items-center gap-2">
+                            {warehouse.icon ? <Icon className="w-4 h-4" /> : null}
+                            {warehouse.name}
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
                 </SelectContent>
               </Select>
 
@@ -748,17 +760,18 @@ export default function Inventory() {
                     <SelectValue placeholder="اختر المخزن" />
                   </SelectTrigger>
                   <SelectContent>
-                    {warehouses.map((warehouse) => {
-                      const Icon = warehouse.icon;
-                      return (
-                        <SelectItem key={warehouse.code} value={warehouse.code}>
-                          <div className="flex items-center gap-2">
-                            <Icon className="w-4 h-4" />
-                            {warehouse.name}
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
+                    {(availableWarehouses.length ? availableWarehouses : staticWarehouses.filter(w => w.code !== 'all'))
+                      .map((warehouse: any) => {
+                        const Icon = (warehouse.icon ?? Warehouse);
+                        return (
+                          <SelectItem key={warehouse.code} value={warehouse.code}>
+                            <div className="flex items-center gap-2">
+                              {warehouse.icon ? <Icon className="w-4 h-4" /> : null}
+                              {warehouse.name}
+                            </div>
+                          </SelectItem>
+                        );
+                      })}
                   </SelectContent>
                 </Select>
               </div>
@@ -810,7 +823,13 @@ export default function Inventory() {
                 const quantity = Number(qtyStr || 0);
                 const avgCost = Number(avgCostStr || 0);
 
-                if (quantity > 0 && !newWarehouse) {
+                // If user entered quantity but didn't pick a warehouse and we have topology, pick the first
+                let warehouseCode = newWarehouse;
+                if (quantity > 0 && !warehouseCode && availableWarehouses.length > 0) {
+                  warehouseCode = availableWarehouses[0].code;
+                }
+
+                if (quantity > 0 && !warehouseCode) {
                   alert('لإضافة كمية أولية، يجب اختيار المخزن أولاً');
                   return;
                 }
@@ -820,10 +839,10 @@ export default function Inventory() {
                   name,
                   category,
                   baseUom: unit,
-                  initial: newWarehouse ? {
+                  initial: warehouseCode ? {
                     quantity,
                     avgCost,
-                    warehouseCode: newWarehouse,
+                    warehouseCode,
                   } : undefined,
                 };
 
