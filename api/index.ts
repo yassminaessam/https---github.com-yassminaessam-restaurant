@@ -7,6 +7,11 @@ let app: any = null;
 function getApp() {
   if (!app) {
     console.log('[api/index] Initializing Express app...');
+    console.log('[api/index] Environment check:', {
+      hasDatabaseUrl: !!process.env.DATABASE_URL,
+      nodeEnv: process.env.NODE_ENV,
+      allEnvKeys: Object.keys(process.env).filter(k => !k.includes('SECRET') && !k.includes('PASSWORD'))
+    });
     app = createServer();
     console.log('[api/index] Express app initialized successfully');
   }
