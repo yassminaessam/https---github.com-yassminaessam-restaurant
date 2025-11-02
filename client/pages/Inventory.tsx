@@ -176,6 +176,8 @@ export default function Inventory() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  // Add item dialog state
+  const [newWarehouse, setNewWarehouse] = useState<string | null>(null);
 
   // Fetch inventory data from API
   useEffect(() => {
@@ -741,7 +743,7 @@ export default function Inventory() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="new-warehouse">المخزن *</Label>
-                <Select>
+                <Select value={newWarehouse ?? undefined} onValueChange={(v) => setNewWarehouse(v)}>
                   <SelectTrigger id="new-warehouse">
                     <SelectValue placeholder="اختر المخزن" />
                   </SelectTrigger>
@@ -791,19 +793,44 @@ export default function Inventory() {
             </Button>
             <Button onClick={async () => {
               try {
-                const newItem = {
-                  code: (document.getElementById('new-sku') as HTMLInputElement).value,
-                  name: (document.getElementById('new-name') as HTMLInputElement).value,
-                  category: (document.getElementById('new-category') as HTMLInputElement).value,
-                  unit: (document.getElementById('new-unit') as HTMLInputElement).value,
+                const sku = (document.getElementById('new-sku') as HTMLInputElement).value.trim();
+                const name = (document.getElementById('new-name') as HTMLInputElement).value.trim();
+                const category = (document.getElementById('new-category') as HTMLInputElement).value.trim();
+                const unit = (document.getElementById('new-unit') as HTMLInputElement).value.trim();
+                const qtyStr = (document.getElementById('new-quantity') as HTMLInputElement).value;
+                const minStockStr = (document.getElementById('new-minStock') as HTMLInputElement).value;
+                const maxStockStr = (document.getElementById('new-maxStock') as HTMLInputElement).value;
+                const avgCostStr = (document.getElementById('new-avgCost') as HTMLInputElement).value;
+
+                if (!sku || !name || !category || !unit) {
+                  alert('يرجى تعبئة الحقول الإجبارية');
+                  return;
+                }
+
+                const quantity = Number(qtyStr || 0);
+                const avgCost = Number(avgCostStr || 0);
+
+                const payload = {
+                  sku,
+                  name,
+                  category,
+                  baseUom: unit,
+                  initial: newWarehouse ? {
+                    quantity,
+                    avgCost,
+                    warehouseCode: newWarehouse,
+                  } : undefined,
                 };
-                
-                // TODO: Call API to create item
-                // await fetch('/api/inventory/items', {
-                //   method: 'POST',
-                //   headers: { 'Content-Type': 'application/json' },
-                //   body: JSON.stringify(newItem)
-                // });
+
+                const resp = await fetch('/api/inventory/items', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(payload)
+                });
+                if (!resp.ok) {
+                  const err = await resp.json().catch(() => ({}));
+                  throw new Error(err?.error || `فشل إضافة الصنف (${resp.status})`);
+                }
                 
                 setIsAddDialogOpen(false);
                 alert('تم إضافة الصنف بنجاح! ✅\n\nيمكنك الآن إضافة الكمية من خلال:\n• محضر استلام البضاعة\n• أو تعديل الصنف مباشرة');

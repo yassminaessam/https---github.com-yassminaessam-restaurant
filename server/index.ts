@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import { handleDemo } from "./routes/demo";
 import { getDbHealth } from "./routes/health";
-import { getTopology, getItems } from "./routes/inventory";
+import { getTopology, getItems, createItem } from "./routes/inventory";
 import { createGRN } from "./routes/grn";
 import { createTransfer } from "./routes/transfer";
 import { createSale } from "./routes/pos";
@@ -114,6 +114,7 @@ export function createServer() {
   app.get("/api/db/health", getDbHealth);
   app.get("/api/inventory/topology", getTopology);
   app.get("/api/inventory/items", getItems);
+  app.post("/api/inventory/items", createItem);
   
   // Inventory operations
   app.post("/api/inventory/grn", createGRN);
