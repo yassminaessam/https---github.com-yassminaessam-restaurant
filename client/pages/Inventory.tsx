@@ -174,6 +174,8 @@ export default function Inventory() {
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isAllItemsDialogOpen, setIsAllItemsDialogOpen] = useState(false);
+  const [allItems, setAllItems] = useState<Array<any>>([]);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   // Add item dialog state
@@ -337,6 +339,20 @@ export default function Inventory() {
             <Button variant="outline">
               <Download className="w-4 h-4 ml-2" />
               تصدير
+            </Button>
+            <Button variant="outline" onClick={async () => {
+              try {
+                setIsAllItemsDialogOpen(true);
+                const resp = await fetch('/api/inventory/items');
+                if (!resp.ok) throw new Error('فشل جلب جميع الأصناف');
+                const data = await resp.json();
+                setAllItems(data);
+              } catch (e) {
+                console.error(e);
+                setAllItems([]);
+              }
+            }}>
+              عرض جميع الأصناف
             </Button>
           </div>
         </div>
@@ -572,6 +588,46 @@ export default function Inventory() {
           </CardContent>
         </Card>
       </div>
+
+      {/* All Items Dialog */}
+      <Dialog open={isAllItemsDialogOpen} onOpenChange={setIsAllItemsDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>جميع الأصناف (حتى بدون رصيد)</DialogTitle>
+            <DialogDescription>هذه القائمة تعرض الأصناف المسجلة حتى لو لم يكن لها أي حركة مخزون</DialogDescription>
+          </DialogHeader>
+          <div className="overflow-x-auto max-h-[60vh]">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-right">SKU</TableHead>
+                  <TableHead className="text-right">الاسم</TableHead>
+                  <TableHead className="text-right">الفئة</TableHead>
+                  <TableHead className="text-right">الوحدة</TableHead>
+                  <TableHead className="text-right">آخر تحديث</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {allItems.map((it) => (
+                  <TableRow key={it.id}>
+                    <TableCell className="font-mono text-sm">{it.sku}</TableCell>
+                    <TableCell className="font-semibold">{it.name}</TableCell>
+                    <TableCell>{it.category}</TableCell>
+                    <TableCell>{it.baseUom}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{it.updatedAt ? new Date(it.updatedAt).toLocaleDateString('ar-EG') : '-'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {allItems.length === 0 && (
+              <div className="py-6 text-center text-muted-foreground">لا توجد أصناف مسجلة</div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setIsAllItemsDialogOpen(false)}>إغلاق</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* View Item Dialog */}
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>

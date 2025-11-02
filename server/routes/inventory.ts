@@ -25,16 +25,27 @@ export const getItems: RequestHandler = async (_req, res) => {
     const prisma = getPrisma();
     const items = await prisma.item.findMany({
       orderBy: { name: "asc" },
-      select: {
-        id: true,
-        sku: true,
-        name: true,
-        uom: true,
-        avgCost: true,
-        category: true
-      }
+      include: {
+        ItemPrice: {
+          orderBy: { updatedAt: "desc" },
+          take: 1,
+        },
+      },
     });
-    res.json(items);
+
+    const formatted = items.map((it: any) => ({
+      id: it.id,
+      sku: it.sku,
+      name: it.name,
+      category: it.category,
+      baseUom: it.baseUom,
+      salePrice: it.ItemPrice?.[0] ? Number(it.ItemPrice[0].salePrice) : 0,
+      costPrice: it.ItemPrice?.[0] ? Number(it.ItemPrice[0].costPrice) : 0,
+      taxRate: it.ItemPrice?.[0] ? Number(it.ItemPrice[0].taxRate) : 0,
+      updatedAt: it.ItemPrice?.[0]?.updatedAt ?? it.createdAt,
+    }));
+
+    res.json(formatted);
   } catch (err: any) {
     res.status(500).json({ error: "Failed to fetch items" });
   }
