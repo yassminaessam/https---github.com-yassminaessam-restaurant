@@ -20,6 +20,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init",
     "prisma:seed": "tsx prisma/seed.ts",
+    "check-db": "tsx scripts/check-db.ts",
+    "check-vercel-env": "tsx scripts/check-vercel-env.ts",
     "test": "vitest --run",
     "format.fix": "prettier --write .",
     "typecheck": "tsc"
