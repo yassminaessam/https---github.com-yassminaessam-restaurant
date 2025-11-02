@@ -1,7 +1,6 @@
-import pkg from "@prisma/client";
-const { PrismaClient } = pkg as any;
+import { PrismaClient } from "@prisma/client";
 
-let prisma: any = null;
+let prisma: PrismaClient | null = null;
 
 export function getPrisma() {
   if (!process.env.DATABASE_URL) {

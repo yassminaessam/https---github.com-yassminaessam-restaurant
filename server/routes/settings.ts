@@ -1,12 +1,11 @@
 import { RequestHandler } from "express";
-import { PrismaClient } from "@prisma/client";
 import { randomUUID } from "crypto";
-
-const prisma = new PrismaClient();
+import { getPrisma } from "../lib/prisma";
 
 // Get all settings
 export const getSettings: RequestHandler = async (req, res) => {
   try {
+    const prisma = getPrisma();
     const settings = await prisma.systemSettings.findMany();
     
     // Transform to an object with key-value pairs
@@ -26,6 +25,7 @@ export const getSettings: RequestHandler = async (req, res) => {
 export const getSettingByKey: RequestHandler = async (req, res) => {
   try {
     const { key } = req.params;
+    const prisma = getPrisma();
     
     const setting = await prisma.systemSettings.findUnique({
       where: { key },
@@ -52,6 +52,7 @@ export const upsertSetting: RequestHandler = async (req, res) => {
       return res.status(400).json({ error: "القيمة مطلوبة" });
     }
 
+    const prisma = getPrisma();
     const setting = await prisma.systemSettings.upsert({
       where: { key },
       update: { value, updatedAt: new Date() },
@@ -78,6 +79,7 @@ export const updateSettings: RequestHandler = async (req, res) => {
       return res.status(400).json({ error: "البيانات غير صحيحة" });
     }
 
+    const prisma = getPrisma();
     // Use transaction to update all settings
     const updates = await prisma.$transaction(
       Object.entries(settings).map(([key, value]) =>
@@ -103,6 +105,7 @@ export const updateSettings: RequestHandler = async (req, res) => {
 // Initialize default settings
 export const initializeDefaultSettings: RequestHandler = async (req, res) => {
   try {
+    const prisma = getPrisma();
     const defaultSettings = {
       business_config: {
         name: "مطعم فيوجن",
