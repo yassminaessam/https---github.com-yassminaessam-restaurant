@@ -1,23 +1,13 @@
 ﻿import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { createServer } from '../server/index';
+import serverless from 'serverless-http';
 
-// Load environment variables
-if (!process.env.DATABASE_URL) {
-  console.error('DATABASE_URL not found in environment');
-}
-
-// Lazy load to avoid build-time issues
-let handler: any = null;
+// Build once at module load so Vercel can statically trace dependencies
+const app = createServer();
+const handler = serverless(app);
 
 export default async function (req: VercelRequest, res: VercelResponse) {
   try {
-    if (!handler) {
-      // Use extensionless import so Vercel TypeScript builder can transpile server code
-      const { createServer } = await import('../server/index');
-      const serverless = await import('serverless-http');
-      const app = createServer();
-      handler = serverless.default(app);
-    }
-    
     await handler(req, res);
   } catch (error: any) {
     console.error('Serverless function error:', error);
