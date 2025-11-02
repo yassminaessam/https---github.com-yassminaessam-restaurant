@@ -810,6 +810,11 @@ export default function Inventory() {
                 const quantity = Number(qtyStr || 0);
                 const avgCost = Number(avgCostStr || 0);
 
+                if (quantity > 0 && !newWarehouse) {
+                  alert('لإضافة كمية أولية، يجب اختيار المخزن أولاً');
+                  return;
+                }
+
                 const payload = {
                   sku,
                   name,
@@ -829,7 +834,8 @@ export default function Inventory() {
                 });
                 if (!resp.ok) {
                   const err = await resp.json().catch(() => ({}));
-                  throw new Error(err?.error || `فشل إضافة الصنف (${resp.status})`);
+                  const msg = err?.error || `فشل إضافة الصنف (${resp.status})`;
+                  throw new Error(msg);
                 }
                 
                 setIsAddDialogOpen(false);
