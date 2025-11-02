@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { createServer } from '../server/index.js';
 
 // Lazy initialization: create app on first request to avoid env issues during build
 let app: any = null;
@@ -11,10 +12,7 @@ function getApp() {
     console.log('[api/[...path]] NODE_ENV:', process.env.NODE_ENV);
     
     try {
-      // Dynamic import to avoid loading Express during build
-      const { createServer } = require('../server/index');
-      console.log('[api/[...path]] createServer imported successfully');
-      
+      console.log('[api/[...path]] Creating Express server...');
       app = createServer();
       console.log('[api/[...path]] Express app created successfully');
     } catch (err: any) {
