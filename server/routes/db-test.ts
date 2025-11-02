@@ -2,10 +2,9 @@ import { RequestHandler } from "express";
 import { v4 as uuid } from "uuid";
 import { getPrisma } from "../lib/prisma";
 
-const prisma = getPrisma();
-
 // إضافة بيانات تجريبية شاملة
 export const seedTestData: RequestHandler = async (req, res) => {
+  const prisma = getPrisma();
   const startTime = Date.now();
   
   try {
@@ -456,6 +455,7 @@ export const seedTestData: RequestHandler = async (req, res) => {
 
 // حذف جميع البيانات التجريبية
 export const clearTestData: RequestHandler = async (req, res) => {
+  const prisma = getPrisma();
   const startTime = Date.now();
   
   try {
@@ -527,6 +527,7 @@ export const clearTestData: RequestHandler = async (req, res) => {
 
 // عرض إحصائيات قاعدة البيانات
 export const getDbStats: RequestHandler = async (req, res) => {
+  const prisma = getPrisma();
   const startTime = Date.now();
   
   try {
@@ -603,6 +604,7 @@ export const getDbStats: RequestHandler = async (req, res) => {
 
 // اختبار أداء الاستعلامات
 export const performanceTest: RequestHandler = async (req, res) => {
+  const prisma = getPrisma();
   try {
     const tests = [];
 
@@ -691,6 +693,7 @@ export const performanceTest: RequestHandler = async (req, res) => {
 
 // عرض جميع البيانات
 export const getAllData: RequestHandler = async (req, res) => {
+  const prisma = getPrisma();
   try {
     const data = await prisma.$transaction(async (tx) => {
       const [
