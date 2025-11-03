@@ -1,0 +1,80 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { getPrisma } from '../../server/lib/prisma';
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const prisma = getPrisma();
+
+  try {
+    if (req.method === 'GET') {
+      const orders = await prisma.purchaseOrder.findMany({
+        include: {
+          Supplier: {
+            select: {
+              id: true,
+              name: true,
+              contact: true,
+            },
+          },
+          PurchaseOrderLine: {
+            include: {
+              Item: {
+                select: {
+                  id: true,
+                  sku: true,
+                  name: true,
+                  baseUom: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      return res.status(200).json(orders);
+    }
+
+    if (req.method === 'POST') {
+      const { supplierId, expectedDate, lines } = req.body;
+      const { randomUUID } = await import('crypto');
+
+      const order = await prisma.purchaseOrder.create({
+        data: {
+          id: randomUUID(),
+          poNumber: `PO-${Date.now()}`,
+          supplierId,
+          poDate: new Date(),
+          expectedDate: new Date(expectedDate),
+          status: 'draft',
+          updatedAt: new Date(),
+          PurchaseOrderLine: {
+            create: lines.map((line: any) => ({
+              id: randomUUID(),
+              itemId: line.itemId,
+              qty: line.qty,
+              unitPrice: line.unitPrice,
+              totalAmount: line.qty * line.unitPrice,
+            })),
+          },
+        },
+        include: {
+          Supplier: true,
+          PurchaseOrderLine: {
+            include: {
+              Item: true,
+            },
+          },
+        },
+      });
+
+      return res.status(201).json(order);
+    }
+
+    return res.status(405).json({ error: 'Method not allowed' });
+  } catch (error) {
+    console.error('Error in purchasing orders endpoint:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
