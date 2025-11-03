@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getPrisma } from '../../server/lib/prisma.js';
+import { randomUUID } from 'crypto';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const prisma = getPrisma();
@@ -8,17 +9,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const items = await prisma.item.findMany({
         include: {
-          category: true,
-          prices: true,
+          ItemPrice: true,
         },
       });
 
       const formattedItems = items.map((item) => ({
         ...item,
-        prices: item.prices.reduce((acc, price) => {
-          acc[price.warehouseCode] = price.unitPrice;
-          return acc;
-        }, {} as Record<string, number>),
+        prices: item.ItemPrice,
       }));
 
       res.json(formattedItems);
@@ -28,7 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   } else if (req.method === 'POST') {
     try {
-      const { sku, name, baseUom, categoryId, initialStock, warehouseCode, unitPrice } = req.body;
+      const { sku, name, baseUom, category, initialStock, warehouseId, salePrice, costPrice } = req.body;
 
       if (!sku || !name || !baseUom) {
         return res.status(400).json({ error: 'sku, name, baseUom are required' });
@@ -36,33 +33,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const item = await prisma.item.create({
         data: {
+          id: randomUUID(),
           sku,
           name,
+          category: category || 'General',
           baseUom,
-          categoryId: categoryId || null,
         },
       });
 
-      if (initialStock && warehouseCode) {
-        if (!warehouseCode) {
-          return res.status(400).json({ error: 'warehouseCode is required for initial stock' });
-        }
-
-        await prisma.stockLevel.create({
+      if (initialStock && warehouseId) {
+        await prisma.stockBatch.create({
           data: {
-            itemSku: sku,
-            warehouseCode,
-            quantity: initialStock,
+            id: randomUUID(),
+            itemId: item.id,
+            warehouseId,
+            qtyOnHand: initialStock,
+            costPrice: costPrice || 0,
           },
         });
       }
 
-      if (unitPrice && warehouseCode) {
+      if (salePrice && costPrice) {
         await prisma.itemPrice.create({
           data: {
-            itemSku: sku,
-            warehouseCode,
-            unitPrice,
+            id: randomUUID(),
+            itemId: item.id,
+            salePrice,
+            costPrice,
+            updatedAt: new Date(),
           },
         });
       }

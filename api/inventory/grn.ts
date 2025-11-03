@@ -9,65 +9,64 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const prisma = getPrisma();
-    const { warehouseCode, items } = req.body;
+    const { warehouseId, items } = req.body;
 
-    if (!warehouseCode || !items || !Array.isArray(items)) {
-      return res.status(400).json({ error: 'warehouseCode and items[] are required' });
+    if (!warehouseId || !items || !Array.isArray(items)) {
+      return res.status(400).json({ error: 'warehouseId and items[] are required' });
     }
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       const grnId = randomUUID();
+      const grnNumber = `GRN-${Date.now()}`;
       
       const grn = await tx.goodsReceiptNote.create({
         data: {
           id: grnId,
-          warehouseCode,
-          receivedDate: new Date(),
-          status: 'COMPLETED',
+          grnNumber,
+          warehouseId,
+          status: 'completed',
+          grnDate: new Date(),
+          updatedAt: new Date(),
         },
       });
 
       for (const item of items) {
-        await tx.goodsReceiptItem.create({
+        await tx.goodsReceiptLine.create({
           data: {
             id: randomUUID(),
             grnId,
-            itemSku: item.sku,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice || 0,
+            itemId: item.itemId,
+            qtyReceived: item.quantity,
+            costPrice: item.costPrice || 0,
+            createdAt: new Date(),
           },
         });
 
-        const existingStock = await tx.stockLevel.findUnique({
-          where: {
-            itemSku_warehouseCode: {
-              itemSku: item.sku,
-              warehouseCode,
-            },
+        // Create or update stock batch
+        await tx.stockBatch.create({
+          data: {
+            id: randomUUID(),
+            itemId: item.itemId,
+            warehouseId,
+            qtyOnHand: item.quantity,
+            costPrice: item.costPrice || 0,
+            lotNumber: item.lotNumber || null,
+            expiryDate: item.expiryDate || null,
           },
         });
 
-        if (existingStock) {
-          await tx.stockLevel.update({
-            where: {
-              itemSku_warehouseCode: {
-                itemSku: item.sku,
-                warehouseCode,
-              },
-            },
-            data: {
-              quantity: existingStock.quantity + item.quantity,
-            },
-          });
-        } else {
-          await tx.stockLevel.create({
-            data: {
-              itemSku: item.sku,
-              warehouseCode,
-              quantity: item.quantity,
-            },
-          });
-        }
+        // Record in stock ledger
+        await tx.stockLedger.create({
+          data: {
+            id: randomUUID(),
+            itemId: item.itemId,
+            warehouseId,
+            movementType: 'GRN',
+            reference: grnNumber,
+            qty: item.quantity,
+            costAmount: item.quantity * (item.costPrice || 0),
+          },
+        });
       }
 
       return grn;

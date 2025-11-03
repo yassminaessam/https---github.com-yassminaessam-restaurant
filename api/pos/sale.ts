@@ -9,48 +9,105 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const prisma = getPrisma();
-    const { warehouseCode, items, customerName, paymentMethod } = req.body;
+    const { warehouseId, items, customerName, paymentMethod } = req.body;
 
-    if (!warehouseCode || !items) {
-      return res.status(400).json({ error: 'warehouseCode and items[] are required' });
+    if (!warehouseId || !items) {
+      return res.status(400).json({ error: 'warehouseId and items[] are required' });
     }
 
     const result = await prisma.$transaction(async (tx: any) => {
-      const saleId = randomUUID();
-      let totalAmount = 0;
+      const orderId = randomUUID();
+      const orderNumber = `POS-${Date.now()}`;
+      let subtotal = 0;
+
+      // Create POS order
+      const order = await tx.posOrder.create({
+        data: {
+          id: orderId,
+          orderNumber,
+          type: 'pos',
+          status: 'completed',
+          customerName: customerName || null,
+          subtotal: 0, // Will update after calculating
+          total: 0,
+          updatedAt: new Date(),
+        },
+      });
 
       for (const item of items) {
-        const stock = await tx.stockLevel.findUnique({
+        // Get stock batches (FIFO)
+        const batches = await tx.stockBatch.findMany({
           where: {
-            itemSku_warehouseCode: {
-              itemSku: item.sku,
-              warehouseCode,
-            },
+            itemId: item.itemId,
+            warehouseId,
+            qtyOnHand: { gt: 0 },
           },
+          orderBy: { receivedAt: 'asc' },
         });
 
-        if (!stock || stock.quantity < item.quantity) {
-          throw new Error(`Insufficient stock for ${item.sku}`);
+        let remainingQty = parseFloat(item.quantity);
+        
+        for (const batch of batches) {
+          if (remainingQty <= 0) break;
+          
+          const qtyToDeduct = Math.min(parseFloat(batch.qtyOnHand.toString()), remainingQty);
+          
+          // Reduce stock
+          await tx.stockBatch.update({
+            where: { id: batch.id },
+            data: { qtyOnHand: parseFloat(batch.qtyOnHand.toString()) - qtyToDeduct },
+          });
+
+          // Record movement
+          await tx.stockLedger.create({
+            data: {
+              id: randomUUID(),
+              itemId: item.itemId,
+              warehouseId,
+              movementType: 'SALE',
+              reference: orderNumber,
+              qty: -qtyToDeduct,
+              costAmount: qtyToDeduct * parseFloat(batch.costPrice.toString()),
+            },
+          });
+
+          remainingQty -= qtyToDeduct;
         }
 
-        await tx.stockLevel.update({
-          where: {
-            itemSku_warehouseCode: {
-              itemSku: item.sku,
-              warehouseCode,
-            },
-          },
+        if (remainingQty > 0) {
+          throw new Error(`Insufficient stock for item ${item.itemId}`);
+        }
+
+        // Create order item
+        const lineTotal = item.quantity * (item.unitPrice || 0);
+        subtotal += lineTotal;
+
+        await tx.posOrderItem.create({
           data: {
-            quantity: stock.quantity - item.quantity,
+            id: randomUUID(),
+            orderId,
+            itemId: item.itemId,
+            qty: item.quantity,
+            unitPrice: item.unitPrice || 0,
+            lineTotal,
           },
         });
-
-        totalAmount += (item.unitPrice || 0) * item.quantity;
       }
 
+      // Update order totals
+      await tx.posOrder.update({
+        where: { id: orderId },
+        data: {
+          subtotal,
+          total: subtotal,
+          paidAt: new Date(),
+        },
+      });
+
       return {
-        saleId,
-        totalAmount,
+        orderId,
+        orderNumber,
+        totalAmount: subtotal,
         itemCount: items.length,
         success: true,
       };

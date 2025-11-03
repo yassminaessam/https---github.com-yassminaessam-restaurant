@@ -10,20 +10,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const prisma = getPrisma();
     const { limit = '50' } = req.query;
     
-    const movements = await prisma.stockMovement.findMany({
+    const movements = await prisma.stockLedger.findMany({
       take: parseInt(limit as string),
       orderBy: {
-        movementDate: 'desc',
+        createdAt: 'desc',
       },
       include: {
-        item: {
+        Item: {
           select: {
             name: true,
+            sku: true,
           },
         },
-        warehouse: {
+        Warehouse: {
           select: {
             name: true,
+            code: true,
           },
         },
       },

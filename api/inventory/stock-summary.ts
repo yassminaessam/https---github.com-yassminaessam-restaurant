@@ -9,21 +9,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const prisma = getPrisma();
     
-    const stockLevels = await prisma.stockLevel.findMany({
+    const stockBatches = await prisma.stockBatch.findMany({
       include: {
-        item: {
+        Item: {
           select: {
             sku: true,
             name: true,
             baseUom: true,
-            category: {
-              select: {
-                name: true,
-              },
-            },
+            category: true,
           },
         },
-        warehouse: {
+        Warehouse: {
           select: {
             code: true,
             name: true,
@@ -32,14 +28,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     });
 
-    const summary = stockLevels.map((level) => ({
-      itemSku: level.itemSku,
-      itemName: level.item.name,
-      warehouseCode: level.warehouseCode,
-      warehouseName: level.warehouse.name,
-      quantity: level.quantity,
-      baseUom: level.item.baseUom,
-      category: level.item.category?.name || 'Uncategorized',
+    const summary = stockBatches.map((batch) => ({
+      itemSku: batch.Item.sku,
+      itemName: batch.Item.name,
+      warehouseCode: batch.Warehouse.code,
+      warehouseName: batch.Warehouse.name,
+      quantity: batch.qtyOnHand,
+      baseUom: batch.Item.baseUom,
+      category: batch.Item.category,
+      lotNumber: batch.lotNumber,
+      expiryDate: batch.expiryDate,
     }));
 
     res.json(summary);

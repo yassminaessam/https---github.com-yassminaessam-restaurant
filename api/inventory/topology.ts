@@ -11,23 +11,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     const warehouses = await prisma.warehouse.findMany({
       select: {
+        id: true,
         code: true,
         name: true,
         type: true,
-        location: true,
       },
     });
 
-    const itemCategories = await prisma.itemCategory.findMany({
+    const categories = await prisma.item.findMany({
       select: {
-        id: true,
-        name: true,
+        category: true,
       },
+      distinct: ['category'],
     });
 
     res.json({
       warehouses,
-      categories: itemCategories,
+      categories: categories.map(c => ({ name: c.category })),
     });
   } catch (error: any) {
     console.error('Error fetching topology:', error);

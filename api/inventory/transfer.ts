@@ -9,74 +9,108 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const prisma = getPrisma();
-    const { fromWarehouse, toWarehouse, items } = req.body;
+    const { fromWarehouseId, toWarehouseId, items, userId } = req.body;
 
-    if (!fromWarehouse || !toWarehouse || !items) {
-      return res.status(400).json({ error: 'fromWarehouse, toWarehouse, and items[] required' });
+    if (!fromWarehouseId || !toWarehouseId || !items) {
+      return res.status(400).json({ error: 'fromWarehouseId, toWarehouseId, and items[] required' });
     }
 
     const result = await prisma.$transaction(async (tx: any) => {
       const transferId = randomUUID();
+      const transferNumber = `TRF-${Date.now()}`;
+
+      // Create transfer record
+      const transfer = await tx.stockTransfer.create({
+        data: {
+          id: transferId,
+          transferNumber,
+          fromWarehouseId,
+          toWarehouseId,
+          userId: userId || randomUUID(), // Placeholder if no user
+          status: 'completed',
+          updatedAt: new Date(),
+        },
+      });
 
       for (const item of items) {
-        const fromStock = await tx.stockLevel.findUnique({
-          where: {
-            itemSku_warehouseCode: {
-              itemSku: item.sku,
-              warehouseCode: fromWarehouse,
-            },
+        // Create transfer line
+        await tx.stockTransferLine.create({
+          data: {
+            id: randomUUID(),
+            transferId,
+            itemId: item.itemId,
+            qty: item.quantity,
           },
         });
 
-        if (!fromStock || fromStock.quantity < item.quantity) {
-          throw new Error(`Insufficient stock for ${item.sku} in ${fromWarehouse}`);
+        // Get stock from source warehouse
+        const fromBatches = await tx.stockBatch.findMany({
+          where: {
+            itemId: item.itemId,
+            warehouseId: fromWarehouseId,
+            qtyOnHand: { gt: 0 },
+          },
+          orderBy: { receivedAt: 'asc' }, // FIFO
+        });
+
+        let remainingQty = parseFloat(item.quantity);
+        
+        for (const batch of fromBatches) {
+          if (remainingQty <= 0) break;
+          
+          const qtyToTransfer = Math.min(parseFloat(batch.qtyOnHand.toString()), remainingQty);
+          
+          // Reduce source batch
+          await tx.stockBatch.update({
+            where: { id: batch.id },
+            data: { qtyOnHand: parseFloat(batch.qtyOnHand.toString()) - qtyToTransfer },
+          });
+
+          // Create batch in destination
+          await tx.stockBatch.create({
+            data: {
+              id: randomUUID(),
+              itemId: item.itemId,
+              warehouseId: toWarehouseId,
+              qtyOnHand: qtyToTransfer,
+              costPrice: batch.costPrice,
+              lotNumber: batch.lotNumber,
+              expiryDate: batch.expiryDate,
+            },
+          });
+
+          // Record movements
+          await tx.stockLedger.create({
+            data: {
+              id: randomUUID(),
+              itemId: item.itemId,
+              warehouseId: fromWarehouseId,
+              movementType: 'TRANSFER_OUT',
+              reference: transferNumber,
+              qty: -qtyToTransfer,
+            },
+          });
+
+          await tx.stockLedger.create({
+            data: {
+              id: randomUUID(),
+              itemId: item.itemId,
+              warehouseId: toWarehouseId,
+              movementType: 'TRANSFER_IN',
+              reference: transferNumber,
+              qty: qtyToTransfer,
+            },
+          });
+
+          remainingQty -= qtyToTransfer;
         }
 
-        await tx.stockLevel.update({
-          where: {
-            itemSku_warehouseCode: {
-              itemSku: item.sku,
-              warehouseCode: fromWarehouse,
-            },
-          },
-          data: {
-            quantity: fromStock.quantity - item.quantity,
-          },
-        });
-
-        const toStock = await tx.stockLevel.findUnique({
-          where: {
-            itemSku_warehouseCode: {
-              itemSku: item.sku,
-              warehouseCode: toWarehouse,
-            },
-          },
-        });
-
-        if (toStock) {
-          await tx.stockLevel.update({
-            where: {
-              itemSku_warehouseCode: {
-                itemSku: item.sku,
-                warehouseCode: toWarehouse,
-              },
-            },
-            data: {
-              quantity: toStock.quantity + item.quantity,
-            },
-          });
-        } else {
-          await tx.stockLevel.create({
-            data: {
-              itemSku: item.sku,
-              warehouseCode: toWarehouse,
-              quantity: item.quantity,
-            },
-          });
+        if (remainingQty > 0) {
+          throw new Error(`Insufficient stock for item ${item.itemId}`);
         }
       }
 
-      return { transferId, success: true };
+      return { transfer, success: true };
     });
 
     res.status(201).json(result);
