@@ -9,5 +9,12 @@
       "maxDuration": 10,
       "includeFiles": "server/**/*.ts"
     }
-  }
+  },
+  "rewrites": [
+    { "source": "/api/inventory/:path*", "destination": "/api/inventory" },
+    { "source": "/api/purchasing/:path*", "destination": "/api/purchasing" },
+    { "source": "/api/production/:path*", "destination": "/api/production" },
+    { "source": "/api/minibar/:path*", "destination": "/api/minibar" },
+    { "source": "/api/pos/:path*", "destination": "/api/pos" }
+  ]
 }
