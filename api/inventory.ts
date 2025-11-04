@@ -113,7 +113,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       if (req.method === 'POST') {
-        const { sku, name, baseUom, category, initialStock, warehouseId, salePrice, costPrice } = req.body;
+        const { sku, name, baseUom, category, initialStock, warehouseId, salePrice, costPrice, initial } = req.body;
 
         if (!sku || !name || !baseUom) {
           return res.status(400).json({ error: 'sku, name, baseUom are required' });
@@ -129,16 +129,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           },
         });
 
-        if (initialStock && warehouseId) {
-          await prisma.stockBatch.create({
-            data: {
-              id: randomUUID(),
-              itemId: item.id,
-              warehouseId,
-              qtyOnHand: initialStock,
-              costPrice: costPrice || 0,
-            },
+        // Handle both old format (initialStock/warehouseId) and new format (initial object)
+        const quantity = initial?.quantity ?? initialStock;
+        const warehouse = initial?.warehouseCode ?? warehouseId;
+        const cost = initial?.avgCost ?? costPrice;
+
+        if (quantity && warehouse) {
+          // Find warehouse by code
+          const warehouseRecord = await prisma.warehouse.findFirst({
+            where: { code: warehouse },
           });
+
+          if (warehouseRecord) {
+            await prisma.stockBatch.create({
+              data: {
+                id: randomUUID(),
+                itemId: item.id,
+                warehouseId: warehouseRecord.id,
+                qtyOnHand: quantity,
+                costPrice: cost || 0,
+              },
+            });
+
+            // Create ledger entry
+            await prisma.stockLedger.create({
+              data: {
+                id: randomUUID(),
+                itemId: item.id,
+                warehouseId: warehouseRecord.id,
+                movementType: 'INITIAL',
+                reference: `INIT-${item.sku}`,
+                qty: quantity,
+                costAmount: quantity * (cost || 0),
+              },
+            });
+          }
         }
 
         if (salePrice && costPrice) {
