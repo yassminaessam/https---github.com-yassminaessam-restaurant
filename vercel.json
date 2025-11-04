@@ -15,6 +15,7 @@
     { "source": "/api/purchasing/:path*", "destination": "/api/purchasing" },
     { "source": "/api/production/:path*", "destination": "/api/production" },
     { "source": "/api/minibar/:path*", "destination": "/api/minibar" },
-    { "source": "/api/pos/:path*", "destination": "/api/pos" }
+    { "source": "/api/pos/:path*", "destination": "/api/pos" },
+    { "source": "/((?!api).*)", "destination": "/index.html" }
   ]
 }
